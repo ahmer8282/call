@@ -3,13 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>P2P Walkie-Talkie Call</title>
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <title>Multi-User Walkie-Talkie</title>
+    <!-- Jitsi Meet External API (Handles 10+ users smoothly) -->
+    <script src='https://meet.jit.si/external_api.js'></script>
+    <!-- QR Code Generator -->
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         :root {
             --bg-color: #121212;
-            --card-bg: #1e1e1e;
+            --card-bg: rgba(30, 30, 30, 0.85);
             --primary: #007aff;
             --danger: #ff3b30;
             --success: #34c759;
@@ -25,69 +27,54 @@
             padding: 0;
             height: 100%;
             overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text);
             display: flex;
             flex-direction: column;
             height: 100vh;
             height: 100dvh;
         }
 
-        .video-container {
+        /* Jitsi Video Container */
+        #jitsi-container {
             flex: 1;
-            position: relative;
-            background: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 0;
-            overflow: hidden;
-        }
-
-        video {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
             background: #000;
         }
 
-        #remoteVideo { z-index: 1; }
-
-        #localVideo {
-            position: absolute;
-            bottom: 10px;
-            right: 10px;
-            width: 80px;
-            height: 110px;
-            border-radius: 8px;
-            border: 2px solid rgba(255,255,255,0.2);
-            z-index: 2;
-            object-fit: cover;
-            transform: scaleX(-1);
-        }
-
+        /* Custom UI Overlay */
         .controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
             background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             padding: 15px;
             padding-bottom: calc(15px + env(safe-area-inset-bottom));
             display: flex;
             flex-direction: column;
             gap: 12px;
-            border-top-left-radius: 16px;
-            border-top-right-radius: 16px;
-            box-shadow: 0 -4px 12px rgba(0,0,0,0.5);
-            flex-shrink: 0;
-            max-height: 45vh;
-            overflow-y: auto;
+            border-top-left-radius: 20px;
+            border-top-right-radius: 20px;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.6);
+            z-index: 10;
+            transition: transform 0.3s ease;
         }
 
         .room-code-display {
-            background: rgba(0, 122, 255, 0.1);
-            border: 2px solid var(--primary);
+            background: rgba(0, 122, 255, 0.15);
+            border: 1px solid var(--primary);
             padding: 15px;
             border-radius: 12px;
             text-align: center;
@@ -141,10 +128,10 @@
         }
 
         button {
-            padding: 12px 16px;
+            padding: 14px 16px;
             border: none;
-            border-radius: 8px;
-            font-size: 15px;
+            border-radius: 10px;
+            font-size: 16px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
@@ -153,7 +140,7 @@
             width: 100%;
         }
 
-        button:active { transform: scale(0.98); }
+        button:active { transform: scale(0.96); }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .btn-primary { background: var(--primary); }
@@ -181,6 +168,9 @@
             border-radius: 8px;
             text-align: center;
             font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .room-display strong {
@@ -188,11 +178,20 @@
             font-size: 18px;
         }
 
-        .ptt-button {
-            padding: 18px;
-            font-size: 18px;
+        .participant-count {
+            background: var(--success);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
             font-weight: 700;
-            border-radius: 10px;
+        }
+
+        .ptt-button {
+            padding: 20px;
+            font-size: 20px;
+            font-weight: 700;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -202,12 +201,12 @@
 
         .ptt-button.muted {
             background: var(--danger);
-            box-shadow: 0 0 15px rgba(255, 59, 48, 0.4);
+            box-shadow: 0 0 20px rgba(255, 59, 48, 0.4);
         }
 
         .ptt-button.unmuted {
             background: var(--success);
-            box-shadow: 0 0 15px rgba(52, 199, 89, 0.4);
+            box-shadow: 0 0 20px rgba(52, 199, 89, 0.4);
         }
 
         .ptt-button:active { transform: scale(0.95); }
@@ -219,8 +218,8 @@
 
         .action-row button {
             flex: 1;
-            padding: 10px;
-            font-size: 13px;
+            padding: 12px;
+            font-size: 14px;
         }
 
         .toast {
@@ -231,7 +230,7 @@
             background: rgba(0,0,0,0.9);
             color: white;
             padding: 15px 25px;
-            border-radius: 8px;
+            border-radius: 12px;
             font-size: 16px;
             z-index: 1000;
             opacity: 0;
@@ -242,30 +241,23 @@
         .toast.show { opacity: 1; }
 
         @media (orientation: landscape) and (max-height: 500px) {
-            .controls {
-                padding: 10px;
-                padding-bottom: calc(10px + env(safe-area-inset-bottom));
-                gap: 8px;
-                max-height: 50vh;
-            }
+            .controls { padding: 10px; gap: 8px; }
             .ptt-button { padding: 12px; font-size: 16px; }
-            #localVideo { width: 60px; height: 80px; }
             .room-code-display .code { font-size: 24px; }
         }
     </style>
 </head>
 <body>
 
-    <div class="video-container">
-        <video id="remoteVideo" autoplay playsinline muted></video>
-        <video id="localVideo" autoplay playsinline muted></video>
-    </div>
+    <!-- Jitsi Video Grid (Runs in background) -->
+    <div id="jitsi-container"></div>
 
+    <!-- SETUP SCREEN -->
     <div class="controls" id="setupScreen">
         <div class="status">Your Room Code:</div>
         
         <div class="room-code-display">
-            <label>Share this code or link:</label>
+            <label>Share this link or QR code:</label>
             <div class="code" id="roomCode">----</div>
         </div>
 
@@ -278,16 +270,18 @@
             <div id="qrcode"></div>
         </div>
 
-        <button class="btn-success" id="joinBtn">📹 Start Camera & Join</button>
+        <button class="btn-success" id="joinBtn">📹 Join Room</button>
     </div>
 
+    <!-- CALL SCREEN (Custom UI over Jitsi) -->
     <div class="controls hidden" id="callScreen">
         <div class="walkie-controls">
             <div class="room-display">
-                Room: <strong id="currentRoom">-</strong>
+                <span>Room: <strong id="currentRoom">-</strong></span>
+                <span class="participant-count" id="participantCount">1</span>
             </div>
             
-            <div class="status" id="statusCall">Connecting...</div>
+            <div class="status" id="statusCall">Connecting to server...</div>
 
             <button class="ptt-button muted" id="pttBtn">
                 <span id="pttIcon">🔇</span>
@@ -295,7 +289,7 @@
             </button>
 
             <div class="action-row">
-                <button class="btn-success" id="camBtn" disabled>📹 Camera</button>
+                <button class="btn-success" id="camBtn">📹 Camera ON</button>
                 <button class="btn-danger" id="hangupBtn">📞 Leave</button>
             </div>
         </div>
@@ -304,8 +298,6 @@
     <div class="toast" id="toast"></div>
 
     <script>
-        const localVideo = document.getElementById('localVideo');
-        const remoteVideo = document.getElementById('remoteVideo');
         const roomCodeDisplay = document.getElementById('roomCode');
         const joinBtn = document.getElementById('joinBtn');
         const setupScreen = document.getElementById('setupScreen');
@@ -321,15 +313,13 @@
         const showQrBtn = document.getElementById('showQrBtn');
         const qrContainer = document.getElementById('qrContainer');
         const toast = document.getElementById('toast');
+        const participantCount = document.getElementById('participantCount');
 
-        let peer;
-        let localStream;
-        let currentCall;
         let myRoom;
-        let myUserId;
-        let otherUserId;
         let qrCode = null;
-        let registrationAttempt = 1;
+        let jitsiApi = null;
+        let isAudioMuted = true;
+        let isVideoMuted = false;
 
         function generateRoomCode() {
             const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -373,13 +363,9 @@
                 textArea.style.left = '-999999px';
                 document.body.appendChild(textArea);
                 textArea.select();
-                try {
-                    document.execCommand('copy');
-                    showToast('✅ Link copied!');
-                } catch (err) {
-                    showToast('❌ Copy failed');
-                }
+                document.execCommand('copy');
                 document.body.removeChild(textArea);
+                showToast('✅ Link copied!');
             }
         });
 
@@ -404,179 +390,122 @@
             }
         });
 
-        joinBtn.addEventListener('click', async () => {
+        joinBtn.addEventListener('click', () => {
             joinBtn.disabled = true;
-            joinBtn.textContent = '⏳ Starting camera...';
+            joinBtn.textContent = '⏳ Connecting...';
+            
+            setupScreen.classList.add('hidden');
+            callScreen.classList.remove('hidden');
+            currentRoomDisplay.textContent = myRoom;
 
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'user',
-                        width: { ideal: 640 },
-                        height: { ideal: 480 }
-                    }, 
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true
+            // Initialize Jitsi Meet
+            const domain = 'meet.jit.si';
+            const options = {
+                roomName: `WalkieTalkie_${myRoom}`,
+                width: '100%',
+                height: '100%',
+                parentNode: document.querySelector('#jitsi-container'),
+                configOverwrite: {
+                    startWithAudioMuted: true,
+                    startWithVideoMuted: false,
+                    prejoinPageEnabled: false,
+                    disableDeepLinking: true, // Prevents iOS from trying to open Jitsi app
+                    resolution: 480, // Optimized for mobile bandwidth
+                    constraints: {
+                        video: { height: { ideal: 480 } }
                     }
-                });
-                
-                localVideo.srcObject = localStream;
-                await localVideo.play();
-                
-                localStream.getAudioTracks()[0].enabled = false;
-                
-                camBtn.disabled = false;
-                currentRoomDisplay.textContent = myRoom;
-                
-                setupScreen.classList.add('hidden');
-                callScreen.classList.remove('hidden');
-                
-                initPeer();
-            } catch (err) {
-                console.error('Media error:', err);
-                alert('Camera/Mic access denied: ' + err.message);
-                joinBtn.disabled = false;
-                joinBtn.textContent = '📹 Start Camera & Join';
-            }
+                },
+                interfaceConfigOverwrite: {
+                    TOOLBAR_BUTTONS: [], // Hide default Jitsi toolbar (we use our custom one)
+                    SHOW_JITSI_WATERMARK: false,
+                    SHOW_WATERMARK_FOR_GUESTS: false,
+                    DEFAULT_BACKGROUND: '#121212',
+                    MOBILE_APP_PROMO: false,
+                    TILE_VIEW_MAX_COLUMNS: 3,
+                    HIDE_INVITE_MORE_HEADER: true
+                },
+                userInfo: {
+                    displayName: 'User'
+                }
+            };
+
+            jitsiApi = new JitsiMeetExternalAPI(domain, options);
+
+            // Listen to Jitsi events to update our custom UI
+            jitsiApi.on('audioMuteStatusChanged', (payload) => {
+                isAudioMuted = payload.muted;
+                updatePTTButton();
+            });
+
+            jitsiApi.on('videoMuteStatusChanged', (payload) => {
+                isVideoMuted = payload.muted;
+                updateCamButton();
+            });
+
+            jitsiApi.on('participantJoined', () => {
+                updateParticipantCount();
+                statusCall.textContent = 'Connected!';
+            });
+
+            jitsiApi.on('participantLeft', () => {
+                updateParticipantCount();
+            });
+
+            jitsiApi.on('readyToClose', () => {
+                location.reload();
+            });
+
+            jitsiApi.on('videoConferenceJoined', () => {
+                statusCall.textContent = 'Connected! Tap to talk.';
+                updateParticipantCount();
+            });
         });
 
-        function initPeer() {
-            // Try to register as user1 first
-            myUserId = `${myRoom}-user${registrationAttempt}`;
-            otherUserId = `${myRoom}-user${registrationAttempt === 1 ? 2 : 1}`;
-            
-            console.log(`Attempting to register as: ${myUserId}`);
-            
-            peer = new Peer(myUserId, {
-                config: {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
-                    ]
-                }
-            });
-
-            peer.on('open', id => {
-                console.log('Successfully registered as:', id);
-                statusCall.textContent = `Connected as ${registrationAttempt === 1 ? 'Host' : 'Guest'}. Waiting...`;
-                
-                // If I'm user2 (guest), call user1 (host) immediately
-                if (registrationAttempt === 2) {
-                    setTimeout(() => {
-                        if (!currentCall) {
-                            console.log('User2 calling user1...');
-                            statusCall.textContent = 'Connecting to host...';
-                            const call = peer.call(otherUserId, localStream);
-                            handleCall(call);
-                        }
-                    }, 1000);
-                }
-            });
-
-            peer.on('call', call => {
-                console.log('Incoming call from:', call.peer);
-                statusCall.textContent = 'Incoming call...';
-                call.answer(localStream);
-                handleCall(call);
-            });
-
-            peer.on('error', err => {
-                console.error('PeerJS error:', err);
-                
-                if (err.type === 'unavailable-id' && registrationAttempt === 1) {
-                    // user1 is taken, so I must be user2
-                    console.log('user1 taken, switching to user2');
-                    registrationAttempt = 2;
-                    peer.destroy();
-                    
-                    // Retry registration as user2
-                    setTimeout(() => {
-                        initPeer();
-                    }, 500);
-                } else if (err.type === 'peer-unavailable') {
-                    statusCall.textContent = 'Waiting for other person to join...';
-                } else if (err.type === 'network' || err.type === 'server-error') {
-                    statusCall.textContent = 'Network error. Retrying...';
-                    setTimeout(() => {
-                        peer.destroy();
-                        initPeer();
-                    }, 3000);
-                } else {
-                    statusCall.textContent = 'Error: ' + err.type;
-                }
-            });
+        function updateParticipantCount() {
+            if (jitsiApi) {
+                const count = jitsiApi.getNumberOfParticipants();
+                participantCount.textContent = `${count} ${count === 1 ? 'Person' : 'People'}`;
+            }
         }
 
-        function handleCall(call) {
-            currentCall = call;
-            statusCall.textContent = 'Connected!';
-
-            call.on('stream', remoteStream => {
-                console.log('Received remote stream');
-                remoteVideo.srcObject = remoteStream;
-                
-                remoteVideo.play().then(() => {
-                    console.log('Remote video playing');
-                }).catch(err => {
-                    console.error('Remote video play error:', err);
-                });
-            });
-
-            call.on('close', () => {
-                console.log('Call closed');
-                endCall();
-            });
-            
-            call.on('error', err => {
-                console.error('Call error:', err);
-                statusCall.textContent = 'Call error. Waiting to reconnect...';
-                currentCall = null;
-            });
-        }
-
-        pttBtn.addEventListener('click', () => {
-            if (!localStream) return;
-            const audioTrack = localStream.getAudioTracks()[0];
-            audioTrack.enabled = !audioTrack.enabled;
-            
-            if (audioTrack.enabled) {
-                pttBtn.classList.remove('muted');
-                pttBtn.classList.add('unmuted');
-                pttIcon.textContent = '🎤';
-                pttText.textContent = 'TAP TO MUTE';
-            } else {
+        function updatePTTButton() {
+            if (isAudioMuted) {
                 pttBtn.classList.remove('unmuted');
                 pttBtn.classList.add('muted');
                 pttIcon.textContent = '🔇';
                 pttText.textContent = 'TAP TO TALK';
+            } else {
+                pttBtn.classList.remove('muted');
+                pttBtn.classList.add('unmuted');
+                pttIcon.textContent = '🎤';
+                pttText.textContent = 'TAP TO MUTE';
             }
+        }
+
+        function updateCamButton() {
+            if (isVideoMuted) {
+                camBtn.textContent = '📺 Camera OFF';
+                camBtn.className = 'btn-danger';
+            } else {
+                camBtn.textContent = '📹 Camera ON';
+                camBtn.className = 'btn-success';
+            }
+        }
+
+        // Custom UI buttons send commands to Jitsi
+        pttBtn.addEventListener('click', () => {
+            if (jitsiApi) jitsiApi.executeCommand('toggleAudio');
         });
 
         camBtn.addEventListener('click', () => {
-            if (!localStream) return;
-            const videoTrack = localStream.getVideoTracks()[0];
-            videoTrack.enabled = !videoTrack.enabled;
-            camBtn.textContent = videoTrack.enabled ? '📹 Camera ON' : '📺 Camera OFF';
-            camBtn.className = videoTrack.enabled ? 'btn-success' : 'btn-danger';
+            if (jitsiApi) jitsiApi.executeCommand('toggleVideo');
         });
 
         hangupBtn.addEventListener('click', () => {
-            if (currentCall) currentCall.close();
-            if (peer) peer.destroy();
-            if (localStream) localStream.getTracks().forEach(track => track.stop());
-            location.reload();
+            if (jitsiApi) jitsiApi.executeCommand('hangup');
         });
 
-        function endCall() {
-            if (currentCall) {
-                currentCall.close();
-                currentCall = null;
-            }
-            remoteVideo.srcObject = null;
-            statusCall.textContent = 'Disconnected. Waiting to reconnect...';
-        }
-
+        // Initialize on load
         initRoom();
     </script>
 </body>
