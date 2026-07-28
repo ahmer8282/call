@@ -272,6 +272,7 @@
       </div>
     </div>
     <div class="hint" id="callHint">In Always-On mode, both mics stay live like a normal video call — tap the 🎤 to mute. In Push-to-Talk mode, hold the big button to transmit, release to listen. Video stays on the whole time either way.</div>
+    <div class="lcd" id="diagLine" style="margin-top:8px; font-size:11px;">Connection diagnostics will appear here…</div>
   </div>
 
   <div class="hint" id="networkHint">
@@ -302,6 +303,7 @@
   const endBtn = document.getElementById('endBtn');
   const modeAlwaysBtn = document.getElementById('modeAlwaysBtn');
   const modePttBtn = document.getElementById('modePttBtn');
+  const diagLine = document.getElementById('diagLine');
 
   let peer = null;
   let currentCall = null;
@@ -387,6 +389,23 @@
       console.error(err);
       setStatus('Call error', false);
     });
+
+    // Diagnostics: watch the underlying WebRTC connection so we can tell
+    // "signaling worked but media is blocked" apart from other failures.
+    const attachDiag = () => {
+      const pc = call.peerConnection;
+      if(!pc) { setTimeout(attachDiag, 300); return; }
+      pc.oniceconnectionstatechange = () => {
+        diagLine.textContent = 'ICE state: ' + pc.iceConnectionState;
+        if(pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected'){
+          diagLine.textContent += ' — media path blocked (likely network-level VoIP restriction). Signaling succeeded but audio/video packets are not getting through.';
+        }
+        if(pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed'){
+          diagLine.textContent = 'ICE state: ' + pc.iceConnectionState + ' — media path established.';
+        }
+      };
+    };
+    attachDiag();
   }
 
   function endCallCleanup(){
@@ -533,6 +552,7 @@
     setupPanel.style.display = 'block';
     hostBtn.disabled = false; joinBtn.disabled = false;
     lcdLine.textContent = 'Call ended. Enter a channel name to start again.';
+    diagLine.textContent = 'Connection diagnostics will appear here…';
     setStatus('Off air', false);
   });
 
