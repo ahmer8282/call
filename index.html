@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Direct Walkie-Talkie</title>
+    <title>Direct Walkie-Talkie (UAE Optimized)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
@@ -17,245 +17,117 @@
             --text: #ffffff;
             --text-secondary: #8e8e93;
         }
-
         * { box-sizing: border-box; }
-
         html, body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            overflow: hidden;
-            background-color: var(--bg-color);
-            color: var(--text);
+            margin: 0; padding: 0; height: 100%; overflow: hidden;
+            background-color: var(--bg-color); color: var(--text);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
-
-        body {
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            height: 100dvh;
-        }
-
+        body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
         .video-container {
-            flex: 1;
-            position: relative;
-            background: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 0;
-            overflow: hidden;
+            flex: 1; position: relative; background: #000;
+            display: flex; align-items: center; justify-content: center;
+            min-height: 0; overflow: hidden;
         }
-
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            background: #000;
-        }
-
+        video { width: 100%; height: 100%; object-fit: cover; background: #000; }
         #remoteVideo { z-index: 1; }
-
         #localVideo {
-            position: absolute;
-            bottom: 15px;
-            right: 15px;
-            width: 90px;
-            height: 120px;
-            border-radius: 10px;
-            border: 2px solid rgba(255,255,255,0.3);
-            z-index: 2;
-            object-fit: cover;
-            transform: scaleX(-1);
+            position: absolute; bottom: 15px; right: 15px;
+            width: 90px; height: 120px; border-radius: 10px;
+            border: 2px solid rgba(255,255,255,0.3); z-index: 2;
+            object-fit: cover; transform: scaleX(-1);
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
-
         .controls {
-            background: var(--card-bg);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            padding: 15px;
+            background: var(--card-bg); backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px); padding: 15px;
             padding-bottom: calc(15px + env(safe-area-inset-bottom));
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            border-top-left-radius: 20px;
-            border-top-right-radius: 20px;
+            display: flex; flex-direction: column; gap: 12px;
+            border-top-left-radius: 20px; border-top-right-radius: 20px;
             box-shadow: 0 -4px 20px rgba(0,0,0,0.6);
-            flex-shrink: 0;
-            max-height: 45vh;
-            overflow-y: auto;
+            flex-shrink: 0; max-height: 45vh; overflow-y: auto;
         }
-
         .room-code-display {
-            background: rgba(0, 122, 255, 0.15);
-            border: 1px solid var(--primary);
-            padding: 15px;
-            border-radius: 12px;
-            text-align: center;
+            background: rgba(0, 122, 255, 0.15); border: 1px solid var(--primary);
+            padding: 15px; border-radius: 12px; text-align: center;
         }
-
         .room-code-display label {
-            display: block;
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-bottom: 8px;
+            display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;
         }
-
         .room-code-display .code {
-            font-size: 32px;
-            font-weight: 700;
-            color: var(--primary);
-            font-family: monospace;
-            letter-spacing: 4px;
+            font-size: 32px; font-weight: 700; color: var(--primary);
+            font-family: monospace; letter-spacing: 4px;
         }
-
-        .share-buttons {
-            display: flex;
-            gap: 8px;
-        }
-
+        .share-buttons { display: flex; gap: 8px; }
         .share-btn {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
+            flex: 1; padding: 12px; border: none; border-radius: 8px;
+            font-size: 14px; font-weight: 600; cursor: pointer; color: white;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
         }
-
         .share-btn.copy { background: var(--primary); }
         .share-btn.qr { background: var(--warning); }
-
         .qr-container {
-            background: white;
-            padding: 15px;
-            border-radius: 12px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            background: white; padding: 15px; border-radius: 12px;
+            display: flex; justify-content: center; align-items: center;
         }
-
         button {
-            padding: 14px 16px;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            color: white;
-            -webkit-tap-highlight-color: transparent;
-            width: 100%;
+            padding: 14px 16px; border: none; border-radius: 10px;
+            font-size: 16px; font-weight: 600; cursor: pointer;
+            transition: all 0.2s; color: white;
+            -webkit-tap-highlight-color: transparent; width: 100%;
         }
-
         button:active { transform: scale(0.96); }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
-
         .btn-primary { background: var(--primary); }
         .btn-danger { background: var(--danger); }
         .btn-success { background: var(--success); }
-
-        .status {
-            text-align: center;
-            font-size: 13px;
-            color: var(--text-secondary);
-            min-height: 18px;
-        }
-
+        .status { text-align: center; font-size: 13px; color: var(--text-secondary); min-height: 18px; }
         .hidden { display: none !important; }
-
-        .walkie-controls {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
+        .walkie-controls { display: flex; flex-direction: column; gap: 12px; }
         .room-display {
-            background: rgba(255,255,255,0.1);
-            padding: 10px;
-            border-radius: 8px;
-            text-align: center;
-            font-size: 14px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px;
+            text-align: center; font-size: 14px;
+            display: flex; justify-content: space-between; align-items: center;
         }
-
-        .room-display strong {
-            color: var(--primary);
-            font-size: 18px;
-        }
-
+        .room-display strong { color: var(--primary); font-size: 18px; }
         .mode-badge {
-            background: var(--warning);
-            color: #000;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 700;
+            background: var(--success); color: #fff;
+            padding: 4px 10px; border-radius: 12px;
+            font-size: 11px; font-weight: 700;
         }
-
         .ptt-button {
-            padding: 20px;
-            font-size: 20px;
-            font-weight: 700;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            transition: all 0.15s;
+            padding: 20px; font-size: 20px; font-weight: 700;
+            border-radius: 12px; display: flex; align-items: center;
+            justify-content: center; gap: 10px; transition: all 0.15s;
         }
-
         .ptt-button.muted {
             background: var(--danger);
             box-shadow: 0 0 20px rgba(255, 59, 48, 0.4);
         }
-
         .ptt-button.unmuted {
             background: var(--success);
             box-shadow: 0 0 20px rgba(52, 199, 89, 0.4);
         }
-
         .ptt-button:active { transform: scale(0.95); }
-
-        .action-row {
-            display: flex;
-            gap: 8px;
-        }
-
-        .action-row button {
-            flex: 1;
-            padding: 12px;
-            font-size: 14px;
-        }
-
+        .action-row { display: flex; gap: 8px; }
+        .action-row button { flex: 1; padding: 12px; font-size: 14px; }
         .toast {
-            position: fixed;
-            top: 50%;
-            left: 50%;
+            position: fixed; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.9);
-            color: white;
-            padding: 15px 25px;
-            border-radius: 12px;
-            font-size: 16px;
-            z-index: 1000;
-            opacity: 0;
-            transition: opacity 0.3s;
-            pointer-events: none;
+            background: rgba(0,0,0,0.9); color: white;
+            padding: 15px 25px; border-radius: 12px;
+            font-size: 16px; z-index: 1000; opacity: 0;
+            transition: opacity 0.3s; pointer-events: none;
         }
-
         .toast.show { opacity: 1; }
-
+        .vpn-notice {
+            background: rgba(255, 149, 0, 0.15);
+            border: 1px solid var(--warning);
+            padding: 10px; border-radius: 8px;
+            font-size: 12px; color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        .vpn-notice strong { color: var(--warning); }
         @media (orientation: landscape) and (max-height: 500px) {
             .controls { padding: 10px; gap: 8px; max-height: 50vh; }
             .ptt-button { padding: 12px; font-size: 16px; }
@@ -265,7 +137,6 @@
     </style>
 </head>
 <body>
-
     <div class="video-container">
         <video id="remoteVideo" autoplay playsinline muted></video>
         <video id="localVideo" autoplay playsinline muted></video>
@@ -277,6 +148,11 @@
         <div class="room-code-display">
             <label>Share this link or QR code:</label>
             <div class="code" id="roomCode">----</div>
+        </div>
+
+        <div class="vpn-notice">
+            <strong>🇦🇪 UAE Users:</strong> If audio doesn't work, your ISP may be blocking VoIP. 
+            Please use a VPN (like Turbo VPN, 1.1.1.1, or ProtonVPN) and try again.
         </div>
 
         <div class="share-buttons">
@@ -295,7 +171,7 @@
         <div class="walkie-controls">
             <div class="room-display">
                 <span>Room: <strong id="currentRoom">-</strong></span>
-                <span class="mode-badge">Direct P2P Mode</span>
+                <span class="mode-badge">TCP 443 Mode</span>
             </div>
             
             <div class="status" id="statusCall">Initializing connection...</div>
@@ -333,8 +209,7 @@
         const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
 
-        let myRoom;
-        let qrCode = null;
+        let myRoom, qrCode = null;
         let peer, localStream, currentCall;
         let myUserId, otherUserId, registrationAttempt = 1;
 
@@ -406,39 +281,19 @@
             joinBtn.textContent = '⏳ Starting camera...';
 
             try {
-                // Request media with explicit audio constraints
                 localStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'user', 
-                        width: { ideal: 640 }, 
-                        height: { ideal: 480 } 
-                    }, 
-                    audio: { 
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    }
+                    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, 
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
                 });
-                
-                console.log('Local stream tracks:', localStream.getTracks());
-                
-                // Verify audio track exists and is active
-                const audioTrack = localStream.getAudioTracks()[0];
-                if (audioTrack) {
-                    console.log('Audio track:', audioTrack.label);
-                    console.log('Audio enabled:', audioTrack.enabled);
-                    audioTrack.enabled = true; // Ensure audio is ON
-                } else {
-                    console.warn('No audio track found!');
-                }
                 
                 localVideo.srcObject = localStream;
                 await localVideo.play();
                 
-                // Start UNMUTED (audio enabled)
+                const audioTrack = localStream.getAudioTracks()[0];
+                if (audioTrack) audioTrack.enabled = true;
+                
                 updatePTTButton(false);
                 updateCamButton(false);
-                
                 camBtn.disabled = false;
                 currentRoomDisplay.textContent = myRoom;
                 
@@ -448,7 +303,7 @@
                 initPeer();
             } catch (err) {
                 console.error('Media error:', err);
-                alert('Camera/Mic access denied: ' + err.message + '\n\nPlease allow permissions in Settings and refresh.');
+                alert('Camera/Mic access denied: ' + err.message);
                 joinBtn.disabled = false;
                 joinBtn.textContent = '📹 Retry';
             }
@@ -460,15 +315,34 @@
             
             console.log(`Attempting to register as: ${myUserId}`);
             
+            // CRITICAL FOR UAE: Use TURN servers on TCP 443
+            // This makes traffic look like HTTPS and bypasses VoIP blocks
             peer = new Peer(myUserId, {
                 config: {
                     iceServers: [
+                        // STUN servers (fast, but can be blocked)
                         { urls: 'stun:stun.l.google.com:19302' },
                         { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' },
-                        { urls: 'stun:stun3.l.google.com:19302' },
-                        { urls: 'stun:stun4.l.google.com:19302' }
-                    ]
+                        
+                        // FREE TURN servers on TCP 443 (looks like HTTPS)
+                        // These are public relay servers - traffic goes through them
+                        { 
+                            urls: 'turn:openrelay.metered.ca:443',
+                            username: 'openrelayproject',
+                            credential: 'openrelayproject'
+                        },
+                        { 
+                            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                            username: 'openrelayproject',
+                            credential: 'openrelayproject'
+                        },
+                        { 
+                            urls: 'turn:openrelay.metered.ca:80?transport=tcp',
+                            username: 'openrelayproject',
+                            credential: 'openrelayproject'
+                        }
+                    ],
+                    iceTransportPolicy: 'all' // Try all, prefer relay if needed
                 }
             });
 
@@ -500,20 +374,17 @@
                 console.error('PeerJS error:', err);
                 
                 if (err.type === 'unavailable-id' && registrationAttempt === 1) {
-                    console.log('user1 taken, switching to user2');
                     registrationAttempt = 2;
                     peer.destroy();
                     setTimeout(() => initPeer(), 500);
                 } else if (err.type === 'peer-unavailable') {
                     statusCall.textContent = 'Waiting for other person to join...';
                 } else if (err.type === 'network' || err.type === 'server-error') {
-                    statusCall.textContent = 'Network error. Retrying...';
-                    setTimeout(() => {
-                        peer.destroy();
-                        initPeer();
-                    }, 3000);
+                    statusCall.textContent = 'Network blocked. Try VPN.';
+                } else if (err.type === 'ice-timeout' || err.type === 'disconnected') {
+                    statusCall.textContent = 'Connection blocked. Use VPN.';
                 } else {
-                    statusCall.textContent = 'Error: ' + err.type;
+                    statusCall.textContent = 'Error: ' + err.type + ' (Try VPN)';
                 }
             });
         }
@@ -524,25 +395,14 @@
 
             call.on('stream', remoteStream => {
                 console.log('Received remote stream');
-                console.log('Remote tracks:', remoteStream.getTracks());
-                
                 remoteVideo.srcObject = remoteStream;
-                
-                remoteVideo.play().then(() => {
-                    console.log('Remote video playing');
-                }).catch(err => {
-                    console.error('Remote video play error:', err);
-                });
+                remoteVideo.play().catch(err => console.error(err));
             });
 
-            call.on('close', () => {
-                console.log('Call closed');
-                endCall();
-            });
-            
+            call.on('close', () => endCall());
             call.on('error', err => {
                 console.error('Call error:', err);
-                statusCall.textContent = 'Call dropped. Waiting to reconnect...';
+                statusCall.textContent = 'Call dropped.';
                 currentCall = null;
             });
         }
@@ -576,7 +436,6 @@
             const audioTrack = localStream.getAudioTracks()[0];
             if (audioTrack) {
                 audioTrack.enabled = !audioTrack.enabled;
-                console.log('Audio toggled:', audioTrack.enabled);
                 updatePTTButton(!audioTrack.enabled);
             }
         });
@@ -596,12 +455,9 @@
         });
 
         function endCall() {
-            if (currentCall) {
-                currentCall.close();
-                currentCall = null;
-            }
+            if (currentCall) { currentCall.close(); currentCall = null; }
             remoteVideo.srcObject = null;
-            statusCall.textContent = 'Disconnected. Waiting to reconnect...';
+            statusCall.textContent = 'Disconnected.';
         }
 
         initRoom();
