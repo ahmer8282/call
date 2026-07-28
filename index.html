@@ -261,8 +261,26 @@
         .btn-danger { background: #9e3d4a; border-color: #c95666; color: white; box-shadow: 0 4px 0 #632b33; }
         .btn-warning { background: #b8863a; border-color: #dfa84a; color: #1a1e2c; box-shadow: 0 4px 0 #7a5a24; }
         .btn-primary { background: #3f4b6b; border-color: #5b6890; color: white; box-shadow: 0 4px 0 #1f263a; }
-        .btn-icon { background: transparent; border: 1px solid #3f4865; border-radius: 60px; padding: 8px 12px; color: #bcc4e0; font-size: 0.9rem; box-shadow: none; min-width: 44px; flex: 0 1 auto; }
+        .btn-icon {
+            background: transparent;
+            border: 1px solid #3f4865;
+            border-radius: 60px;
+            padding: 8px 12px;
+            color: #bcc4e0;
+            font-size: 0.9rem;
+            box-shadow: none;
+            min-width: 44px;
+            flex: 0 1 auto;
+            cursor: pointer;
+            transition: 0.15s;
+            touch-action: manipulation;
+        }
         .btn-icon:active { transform: scale(0.94); }
+        .btn-icon.active {
+            background: #2f3a57;
+            color: #4caf84;
+            border-color: #4caf84;
+        }
         .btn-speaker {
             background: transparent;
             border: 1px solid #3f4865;
@@ -360,6 +378,7 @@
     <div class="controls">
         <button class="btn btn-danger" id="hangupBtn" disabled><i class="fas fa-phone-slash"></i> Hangup</button>
         <button class="btn btn-warning" id="toggleVideoBtn"><i class="fas fa-video"></i> Video</button>
+        <button class="btn-icon" id="cameraSwitchBtn" title="Switch Camera"><i class="fas fa-sync-alt"></i></button>
         <button class="btn btn-icon" id="toggleAudioBtn"><i class="fas fa-microphone"></i></button>
         <button class="btn-speaker" id="speakerBtn" disabled><i class="fas fa-volume-up"></i></button>
     </div>
@@ -390,6 +409,7 @@
         const toggleVideoBtn = document.getElementById('toggleVideoBtn');
         const toggleAudioBtn = document.getElementById('toggleAudioBtn');
         const speakerBtn = document.getElementById('speakerBtn');
+        const cameraSwitchBtn = document.getElementById('cameraSwitchBtn');
         const remoteIdInput = document.getElementById('remoteIdInput');
         const remoteInputArea = document.getElementById('remoteInputArea');
         const modeBtns = document.querySelectorAll('.mode-btn');
@@ -403,11 +423,11 @@
         let isVideoEnabled = true;
         let isAudioEnabled = true;
         let isSpeakerOn = false;
+        let isFrontCamera = true;
         let myPeerId = '';
         let remotePeerId = '';
         let isOnline = false;
         let currentMode = 'caller';
-        let reconnectAttempts = 0;
 
         // ----- Persistent ID -----
         const STORAGE_KEY = 'walkietalk_peer_id';
@@ -481,6 +501,68 @@
             }
         }
 
+        // ----- Camera switch -----
+        async function switchCamera() {
+            if (!localStream) {
+                updateInfo('Start local stream first');
+                return;
+            }
+
+            isFrontCamera = !isFrontCamera;
+            cameraSwitchBtn.classList.toggle('active', !isFrontCamera);
+            
+            try {
+                // Get current track settings
+                const videoTrack = localStream.getVideoTracks()[0];
+                if (!videoTrack) {
+                    updateInfo('No video track to switch');
+                    return;
+                }
+
+                // Stop current video track
+                videoTrack.stop();
+                localStream.removeTrack(videoTrack);
+
+                // Get new video track with opposite facing mode
+                const constraints = {
+                    audio: false,
+                    video: {
+                        facingMode: isFrontCamera ? 'user' : 'environment',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                };
+
+                const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+                const newVideoTrack = newStream.getVideoTracks()[0];
+                
+                if (newVideoTrack) {
+                    localStream.addTrack(newVideoTrack);
+                    localVideo.srcObject = localStream;
+                    
+                    // Update the call with new track if in a call
+                    if (call && isCallActive) {
+                        const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                        if (sender) {
+                            await sender.replaceTrack(newVideoTrack);
+                        }
+                    }
+                    
+                    updateInfo(isFrontCamera ? '📷 Front camera' : '📷 Back camera');
+                }
+                
+                newStream.getTracks().forEach(t => {
+                    if (t.kind !== 'video') t.stop();
+                });
+                
+            } catch (err) {
+                console.error('Camera switch error:', err);
+                isFrontCamera = !isFrontCamera; // revert
+                cameraSwitchBtn.classList.toggle('active', !isFrontCamera);
+                updateInfo('Camera switch failed: ' + err.message);
+            }
+        }
+
         // ----- Helpers -----
         function updateStatus(text, online = true) {
             statusText.innerText = text;
@@ -495,6 +577,7 @@
         function setButtons(callActive) {
             hangupBtn.disabled = !callActive;
             speakerBtn.disabled = !callActive;
+            cameraSwitchBtn.disabled = !isOnline;
             if (callActive) {
                 callBtn.disabled = true;
                 callBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Calling...';
@@ -550,6 +633,8 @@
             isVideoEnabled = true;
             isAudioEnabled = true;
             isSpeakerOn = false;
+            isFrontCamera = true;
+            cameraSwitchBtn.classList.remove('active');
             toggleVideoBtn.innerHTML = '<i class="fas fa-video"></i> Video';
             toggleAudioBtn.innerHTML = '<i class="fas fa-microphone"></i>';
             speakerBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
@@ -570,7 +655,11 @@
             try {
                 const constraints = {
                     audio: audioOn,
-                    video: videoOn ? { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } : false
+                    video: videoOn ? { 
+                        facingMode: isFrontCamera ? 'user' : 'environment',
+                        width: { ideal: 640 }, 
+                        height: { ideal: 480 } 
+                    } : false
                 };
                 return await navigator.mediaDevices.getUserMedia(constraints);
             } catch (err) {
@@ -616,7 +705,6 @@
                 peer = null;
             }
 
-            // Get stored ID or generate new one
             let id = getStoredId();
             if (!id) {
                 id = generateId();
@@ -624,7 +712,6 @@
             }
             myPeerId = id;
             myIdDisplay.innerText = id;
-            reconnectAttempts = 0;
 
             updateStatus('Connecting...', true);
             updateInfo('Connecting to PeerJS network...');
@@ -646,12 +733,12 @@
                 myIdDisplay.innerText = id;
                 storeId(id);
                 isOnline = true;
-                reconnectAttempts = 0;
                 updateStatus('Ready', true);
                 updateInfo(currentMode === 'caller' ? 'Enter ID and call' : 'Waiting for incoming call...');
                 connectBtn.innerHTML = '<i class="fas fa-check"></i> Online';
                 startLocalStream();
                 callBtn.disabled = (currentMode === 'receiver');
+                cameraSwitchBtn.disabled = false;
                 if (currentMode === 'receiver') {
                     remotePlaceholder.innerHTML = '<i class="fas fa-headset waiting-pulse"></i>';
                     remotePlaceholder.style.fontSize = '3rem';
@@ -662,12 +749,10 @@
             peer.on('error', (err) => {
                 console.error('Peer error:', err);
                 if (err.type === 'unavailable-id') {
-                    // ID is taken, generate a new one
                     const newId = generateId();
                     storeId(newId);
                     myIdDisplay.innerText = newId;
                     updateInfo('ID was taken, using: ' + newId);
-                    // Destroy and reconnect with new ID
                     if (peer) {
                         peer.destroy();
                         peer = null;
@@ -690,7 +775,6 @@
                 updateStatus('Disconnected', false);
                 updateInfo('Disconnected - reconnecting...');
                 connectBtn.innerHTML = '<i class="fas fa-plug"></i> Reconnect';
-                // Try to reconnect automatically
                 setTimeout(() => {
                     if (peer && !peer.open) {
                         peer.reconnect();
@@ -705,7 +789,6 @@
                 fullReset();
             });
 
-            // ----- Auto-answer incoming calls -----
             peer.on('call', (incomingCall) => {
                 if (isCallActive) { 
                     incomingCall.answer(); 
@@ -936,6 +1019,7 @@
         toggleVideoBtn.addEventListener('click', toggleVideo);
         toggleAudioBtn.addEventListener('click', toggleAudio);
         speakerBtn.addEventListener('click', toggleSpeaker);
+        cameraSwitchBtn.addEventListener('click', switchCamera);
         myIdDisplay.addEventListener('click', editId);
 
         modeBtns.forEach(btn => {
@@ -948,7 +1032,7 @@
             if (e.key === 'Enter') makeCall();
         });
 
-        // Auto-connect on load with a small delay
+        // Auto-connect on load
         window.addEventListener('load', () => {
             setTimeout(connectPeer, 1000);
         });
