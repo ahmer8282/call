@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>📡 Walkie-Talkie · Voice & Video</title>
-    <!-- Font Awesome for icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>📡 WalkieTalk · PeerJS</title>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <!-- PeerJS library -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -23,14 +25,13 @@
             touch-action: manipulation;
         }
         .container {
-            max-width: 450px;
+            max-width: 480px;
             width: 100%;
             background: #232837;
             border-radius: 48px 48px 32px 32px;
-            padding: 24px 20px 32px;
+            padding: 24px 20px 28px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.6);
             border: 1px solid #3d445b;
-            transition: all 0.2s;
         }
         .header {
             display: flex;
@@ -39,19 +40,17 @@
             color: #c8d0e6;
             padding-bottom: 12px;
             border-bottom: 1px solid #2f3649;
+            flex-wrap: wrap;
+            gap: 8px;
         }
         .header h1 {
-            font-size: 1.5rem;
+            font-size: 1.4rem;
             font-weight: 600;
-            letter-spacing: 0.5px;
             display: flex;
             align-items: center;
             gap: 8px;
         }
-        .header h1 i {
-            color: #f5b042;
-            font-size: 1.6rem;
-        }
+        .header h1 i { color: #f5b042; }
         .status-badge {
             background: #2e354a;
             padding: 6px 14px;
@@ -64,21 +63,59 @@
             align-items: center;
             gap: 6px;
         }
-        .status-badge i {
-            color: #4caf84;
-            font-size: 0.6rem;
-        }
+        .status-badge i { color: #4caf84; font-size: 0.6rem; }
+        .status-badge.off i { color: #e74c5e; }
 
-        /* video area */
+        .peer-id-box {
+            background: #191e2d;
+            border-radius: 60px;
+            padding: 10px 16px;
+            margin: 12px 0 14px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            border: 1px solid #2d3447;
+        }
+        .peer-id-box input {
+            background: #11141f;
+            border: 1px solid #3a415a;
+            border-radius: 40px;
+            padding: 10px 16px;
+            color: #e8edff;
+            font-size: 0.9rem;
+            flex: 1 1 140px;
+            min-width: 100px;
+            outline: none;
+        }
+        .peer-id-box input::placeholder { color: #5c6583; }
+        .peer-id-box .btn-small {
+            background: #3f4b6b;
+            border: none;
+            border-radius: 40px;
+            padding: 10px 18px;
+            color: white;
+            font-weight: 600;
+            font-size: 0.8rem;
+            cursor: pointer;
+            border: 1px solid #5b6890;
+            box-shadow: 0 4px 0 #1f263a;
+            transition: 0.08s linear;
+            touch-action: manipulation;
+        }
+        .peer-id-box .btn-small:active { transform: translateY(3px); box-shadow: 0 1px 0 #1f263a; }
+        .peer-id-box .btn-small:disabled { opacity: 0.4; transform: translateY(2px); box-shadow: 0 2px 0 #1f263a; pointer-events: none; }
+
         .video-grid {
-            margin: 18px 0 20px;
+            margin: 14px 0 16px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 10px;
         }
         .video-box {
             background: #11141f;
-            border-radius: 28px;
+            border-radius: 24px;
             overflow: hidden;
             position: relative;
             aspect-ratio: 16/9;
@@ -95,126 +132,81 @@
             background: #0b0d14;
             display: block;
         }
-        .video-box .local-label, .video-box .remote-label {
+        .video-box .label {
             position: absolute;
-            bottom: 12px;
-            left: 16px;
+            bottom: 10px;
+            left: 14px;
             background: rgba(0,0,0,0.6);
             backdrop-filter: blur(4px);
-            padding: 4px 14px;
+            padding: 3px 14px;
             border-radius: 40px;
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             font-weight: 500;
             color: #e0e6ff;
             border: 1px solid #4b536e;
             pointer-events: none;
         }
-        .video-box .remote-label {
-            left: auto;
-            right: 16px;
-            background: rgba(40, 50, 80, 0.7);
-        }
+        .video-box .label.right { left: auto; right: 14px; background: rgba(40,50,80,0.7); }
         .video-box .placeholder-icon {
             color: #3d455e;
-            font-size: 3.4rem;
+            font-size: 3rem;
             opacity: 0.5;
+            position: absolute;
         }
 
         .walkie-controls {
             background: #1e2335;
             border-radius: 60px;
-            padding: 16px 20px;
-            margin: 8px 0 16px;
+            padding: 14px 16px;
+            margin: 6px 0 14px;
             display: flex;
             flex-wrap: wrap;
             align-items: center;
             justify-content: center;
-            gap: 16px 20px;
+            gap: 12px 14px;
             border: 1px solid #31384d;
         }
         .btn {
             background: #2f3649;
             border: none;
             border-radius: 60px;
-            padding: 12px 20px;
+            padding: 11px 18px;
             color: #d3daf5;
             font-weight: 600;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 8px;
             cursor: pointer;
-            transition: all 0.15s;
+            transition: 0.08s linear;
             border: 1px solid #414a63;
-            box-shadow: 0 6px 0 #141824;
+            box-shadow: 0 5px 0 #141824;
             touch-action: manipulation;
             flex: 1 1 auto;
-            min-width: 100px;
+            min-width: 80px;
         }
-        .btn:active {
-            transform: translateY(4px);
-            box-shadow: 0 2px 0 #141824;
-        }
-        .btn-primary {
-            background: #3f4b6b;
-            border-color: #5b6890;
-            color: white;
-            box-shadow: 0 6px 0 #1f263a;
-        }
-        .btn-success {
-            background: #2d7a5a;
-            border-color: #3fa07a;
-            color: white;
-            box-shadow: 0 6px 0 #154d37;
-        }
-        .btn-danger {
-            background: #9e3d4a;
-            border-color: #c95666;
-            color: white;
-            box-shadow: 0 6px 0 #632b33;
-        }
-        .btn-warning {
-            background: #b8863a;
-            border-color: #dfa84a;
-            color: #1a1e2c;
-            box-shadow: 0 6px 0 #7a5a24;
-        }
-        .btn:disabled {
-            opacity: 0.4;
-            transform: translateY(2px);
-            box-shadow: 0 3px 0 #141824;
-            pointer-events: none;
-        }
-        .icon-btn {
-            background: transparent;
-            border: 1px solid #3f4865;
-            border-radius: 60px;
-            padding: 10px 14px;
-            color: #bcc4e0;
-            font-size: 1.1rem;
-            box-shadow: none;
-            min-width: 54px;
-            flex: 0 1 auto;
-        }
-        .icon-btn:active {
-            transform: scale(0.94);
-        }
+        .btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #141824; }
+        .btn:disabled { opacity: 0.35; transform: translateY(3px); box-shadow: 0 2px 0 #141824; pointer-events: none; }
+        .btn-success { background: #2d7a5a; border-color: #3fa07a; color: white; box-shadow: 0 5px 0 #154d37; }
+        .btn-danger { background: #9e3d4a; border-color: #c95666; color: white; box-shadow: 0 5px 0 #632b33; }
+        .btn-warning { background: #b8863a; border-color: #dfa84a; color: #1a1e2c; box-shadow: 0 5px 0 #7a5a24; }
+        .btn-primary { background: #3f4b6b; border-color: #5b6890; color: white; box-shadow: 0 5px 0 #1f263a; }
+        .btn-icon { background: transparent; border: 1px solid #3f4865; border-radius: 60px; padding: 10px 14px; color: #bcc4e0; font-size: 1rem; box-shadow: none; min-width: 50px; flex: 0 1 auto; }
+        .btn-icon:active { transform: scale(0.94); }
 
         .call-actions {
             display: flex;
             flex-wrap: wrap;
             justify-content: center;
-            gap: 12px;
-            margin-top: 6px;
+            gap: 10px;
+            margin-top: 4px;
         }
-        .call-actions .btn {
-            flex: 1 1 100px;
-        }
+        .call-actions .btn { flex: 1 1 90px; }
 
         .info-note {
-            margin-top: 20px;
-            padding: 12px 16px;
+            margin-top: 16px;
+            padding: 10px 16px;
             background: #191e2d;
             border-radius: 60px;
             color: #9aa5c7;
@@ -224,26 +216,22 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 12px;
+            gap: 10px;
             flex-wrap: wrap;
         }
-        .info-note i {
-            color: #f0b34b;
-        }
-
+        .info-note i { color: #f0b34b; }
         .footer {
-            margin-top: 14px;
+            margin-top: 12px;
             color: #5c6583;
             font-size: 0.6rem;
             text-align: center;
             letter-spacing: 0.3px;
         }
-
-        /* responsive */
         @media (max-width: 420px) {
-            .container { padding: 16px 12px 24px; }
-            .btn { font-size: 0.8rem; padding: 10px 12px; min-width: 80px; }
-            .walkie-controls { gap: 10px; }
+            .container { padding: 16px 12px 20px; }
+            .btn { font-size: 0.75rem; padding: 9px 10px; min-width: 70px; }
+            .walkie-controls { gap: 8px; }
+            .peer-id-box input { font-size: 0.8rem; padding: 8px 12px; }
         }
     </style>
 </head>
@@ -251,42 +239,48 @@
 <div class="container" id="app">
     <div class="header">
         <h1><i class="fas fa-bolt"></i> WalkieTalk</h1>
-        <div class="status-badge"><i class="fas fa-circle"></i> <span id="statusText">Ready</span></div>
+        <div class="status-badge" id="statusBadge"><i class="fas fa-circle"></i> <span id="statusText">Offline</span></div>
     </div>
 
-    <!-- Video grid -->
+    <!-- Peer ID + Connect -->
+    <div class="peer-id-box">
+        <input type="text" id="peerIdInput" placeholder="Your Peer ID" value="walkie-123" />
+        <button class="btn-small" id="connectPeerBtn"><i class="fas fa-plug"></i> Connect</button>
+        <button class="btn-small" id="copyIdBtn"><i class="far fa-copy"></i></button>
+    </div>
+
+    <!-- Video -->
     <div class="video-grid">
         <div class="video-box" id="remoteVideoBox">
-            <video id="remoteVideo" autoplay playsinline muted></video>
-            <span class="remote-label"><i class="fas fa-user"></i> Remote</span>
+            <video id="remoteVideo" autoplay playsinline></video>
+            <span class="label right"><i class="fas fa-user"></i> Remote</span>
             <div class="placeholder-icon" id="remotePlaceholder"><i class="fas fa-video-slash"></i></div>
         </div>
         <div class="video-box" id="localVideoBox">
             <video id="localVideo" autoplay playsinline muted></video>
-            <span class="local-label"><i class="fas fa-user"></i> You</span>
+            <span class="label"><i class="fas fa-user"></i> You</span>
             <div class="placeholder-icon" id="localPlaceholder"><i class="fas fa-camera"></i></div>
         </div>
     </div>
 
-    <!-- Walkie controls -->
+    <!-- Controls -->
     <div class="walkie-controls">
-        <button class="btn btn-success" id="callBtn"><i class="fas fa-phone-alt"></i> Call</button>
+        <button class="btn btn-success" id="callBtn" disabled><i class="fas fa-phone-alt"></i> Call</button>
         <button class="btn btn-danger" id="hangupBtn" disabled><i class="fas fa-phone-slash"></i> Hangup</button>
         <button class="btn btn-warning" id="toggleVideoBtn"><i class="fas fa-video"></i> Video</button>
-        <button class="btn icon-btn" id="toggleAudioBtn"><i class="fas fa-microphone"></i></button>
+        <button class="btn btn-icon" id="toggleAudioBtn"><i class="fas fa-microphone"></i></button>
     </div>
 
-    <!-- extra actions -->
     <div class="call-actions">
         <button class="btn btn-primary" id="startLocalBtn"><i class="fas fa-play"></i> Start local</button>
     </div>
 
     <div class="info-note">
-        <i class="fas fa-wifi"></i> <span id="connectionInfo">WebRTC · UAE ready</span>
+        <i class="fas fa-wifi"></i> <span id="connectionInfo">PeerJS · not connected</span>
         <i class="fas fa-rotate-right" id="resetIcon" style="cursor:pointer; margin-left: 4px;"></i>
     </div>
     <div class="footer">
-        <i class="fas fa-shield-alt"></i> P2P · works on mobile · hosted on GitHub
+        <i class="fas fa-shield-alt"></i> P2P via PeerJS · share your Peer ID to receive calls
     </div>
 </div>
 
@@ -294,14 +288,18 @@
     (function() {
         "use strict";
 
-        // DOM elements
+        // ---------- DOM refs ----------
         const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
         const localPlaceholder = document.getElementById('localPlaceholder');
         const remotePlaceholder = document.getElementById('remotePlaceholder');
         const statusText = document.getElementById('statusText');
+        const statusBadge = document.getElementById('statusBadge');
         const connectionInfo = document.getElementById('connectionInfo');
 
+        const peerIdInput = document.getElementById('peerIdInput');
+        const connectPeerBtn = document.getElementById('connectPeerBtn');
+        const copyIdBtn = document.getElementById('copyIdBtn');
         const callBtn = document.getElementById('callBtn');
         const hangupBtn = document.getElementById('hangupBtn');
         const toggleVideoBtn = document.getElementById('toggleVideoBtn');
@@ -309,36 +307,22 @@
         const startLocalBtn = document.getElementById('startLocalBtn');
         const resetIcon = document.getElementById('resetIcon');
 
-        // state
+        // ---------- State ----------
         let localStream = null;
         let remoteStream = null;
-        let peerConnection = null;
+        let peer = null;            // PeerJS instance
+        let connection = null;      // PeerJS data connection (for signaling)
+        let call = null;           // PeerJS media call
         let isCallActive = false;
         let isVideoEnabled = true;
         let isAudioEnabled = true;
+        let myPeerId = '';
+        let remotePeerId = '';
 
-        // STUN / TURN (UAE friendly: using Google STUN and a backup TURN)
-        const rtcConfig = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                {
-                    urls: 'turn:openrelay.metered.ca:80',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
-                },
-                {
-                    urls: 'turn:openrelay.metered.ca:443',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
-                }
-            ],
-            iceCandidatePoolSize: 10
-        };
-
-        // ----- helper functions -----
-        function updateStatus(text, isGood = true) {
+        // ---------- Helpers ----------
+        function updateStatus(text, isOnline = true) {
             statusText.innerText = text;
+            statusBadge.className = 'status-badge' + (isOnline ? '' : ' off');
         }
 
         function updateConnectionInfo(text) {
@@ -346,7 +330,7 @@
         }
 
         function setButtons(callActive) {
-            callBtn.disabled = callActive;
+            callBtn.disabled = callActive || !peer || !remotePeerId;
             hangupBtn.disabled = !callActive;
             if (callActive) {
                 callBtn.classList.remove('btn-success');
@@ -357,35 +341,62 @@
             }
         }
 
-        // reset UI to idle
-        function resetUI() {
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
+        // reset UI (keep peer connection)
+        function resetCallUI() {
+            if (call) {
+                call.close();
+                call = null;
             }
-            if (localStream) {
-                localStream.getTracks().forEach(t => t.stop());
-                localStream = null;
+            if (connection) {
+                connection.close();
+                connection = null;
             }
             if (remoteStream) {
                 remoteStream.getTracks().forEach(t => t.stop());
                 remoteStream = null;
+                remoteVideo.srcObject = null;
             }
-            localVideo.srcObject = null;
-            remoteVideo.srcObject = null;
-            localPlaceholder.style.display = 'flex';
             remotePlaceholder.style.display = 'flex';
+            remotePlaceholder.innerHTML = '<i class="fas fa-video-slash"></i>';
+            isCallActive = false;
+            setButtons(false);
+            updateStatus(peer ? 'Ready' : 'Offline', !!peer);
+            updateConnectionInfo(peer ? 'PeerJS · idle' : 'PeerJS · not connected');
+            remotePeerId = '';
+        }
+
+        // full reset (including peer)
+        function fullReset() {
+            if (call) { call.close(); call = null; }
+            if (connection) { connection.close(); connection = null; }
+            if (peer) { peer.destroy(); peer = null; }
+            if (localStream) {
+                localStream.getTracks().forEach(t => t.stop());
+                localStream = null;
+                localVideo.srcObject = null;
+            }
+            if (remoteStream) {
+                remoteStream.getTracks().forEach(t => t.stop());
+                remoteStream = null;
+                remoteVideo.srcObject = null;
+            }
+            localPlaceholder.style.display = 'flex';
+            localPlaceholder.innerHTML = '<i class="fas fa-camera"></i>';
+            remotePlaceholder.style.display = 'flex';
+            remotePlaceholder.innerHTML = '<i class="fas fa-video-slash"></i>';
             isCallActive = false;
             isVideoEnabled = true;
             isAudioEnabled = true;
-            setButtons(false);
-            updateStatus('Ready');
-            updateConnectionInfo('WebRTC · idle');
             toggleVideoBtn.innerHTML = '<i class="fas fa-video"></i> Video';
             toggleAudioBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+            remotePeerId = '';
+            updateStatus('Offline', false);
+            updateConnectionInfo('PeerJS · disconnected');
+            setButtons(false);
+            connectPeerBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
         }
 
-        // ----- get local stream (with audio + video) -----
+        // ---------- Get local stream ----------
         async function getLocalStream(videoEnabled = true, audioEnabled = true) {
             try {
                 const constraints = {
@@ -396,20 +407,19 @@
                 return stream;
             } catch (err) {
                 console.error('getUserMedia error:', err);
-                // fallback: try audio only
+                // fallback audio only
                 if (videoEnabled) {
                     try {
                         const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
                         return audioOnly;
                     } catch (e2) {
-                        throw new Error('Could not access camera/mic: ' + e2.message);
+                        throw new Error('Cannot access media: ' + e2.message);
                     }
                 }
                 throw err;
             }
         }
 
-        // ----- display local stream -----
         async function startLocalStream() {
             try {
                 if (localStream) {
@@ -419,7 +429,6 @@
                 localStream = await getLocalStream(isVideoEnabled, isAudioEnabled);
                 localVideo.srcObject = localStream;
                 localPlaceholder.style.display = 'none';
-                // if video track missing, show placeholder
                 const hasVideo = localStream.getVideoTracks().length > 0;
                 if (!hasVideo) {
                     localPlaceholder.style.display = 'flex';
@@ -427,225 +436,218 @@
                 } else {
                     localPlaceholder.style.display = 'none';
                 }
-                updateStatus('Local ready');
+                updateStatus(peer ? 'Ready' : 'Local ready', !!peer);
                 return localStream;
             } catch (err) {
-                alert('Could not access camera/microphone. Please allow permissions.\n' + err.message);
-                updateStatus('Error');
+                alert('Could not access camera/mic. Please allow permissions.\n' + err.message);
+                updateStatus('Error', false);
                 return null;
             }
         }
 
-        // ----- create peer connection with negotiation -----
-        async function createPeerConnection(stream) {
-            if (!stream) throw new Error('No local stream');
-            const pc = new RTCPeerConnection(rtcConfig);
-            // add local tracks
-            stream.getTracks().forEach(track => {
-                pc.addTrack(track, stream);
+        // ---------- PeerJS connect ----------
+        function connectPeer() {
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+            const id = peerIdInput.value.trim() || 'walkie-' + Math.floor(Math.random() * 10000);
+            peerIdInput.value = id;
+            myPeerId = id;
+
+            peer = new Peer(id, {
+                debug: 1,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+                    ]
+                }
             });
 
-            // handle remote tracks
-            pc.ontrack = (event) => {
+            peer.on('open', (id) => {
+                myPeerId = id;
+                peerIdInput.value = id;
+                updateStatus('Ready', true);
+                updateConnectionInfo('PeerJS · online (ID: ' + id + ')');
+                connectPeerBtn.innerHTML = '<i class="fas fa-check"></i> Online';
+                setButtons(false);
+                // auto-start local stream if not already
+                if (!localStream) {
+                    startLocalStream();
+                }
+            });
+
+            peer.on('error', (err) => {
+                console.error('PeerJS error:', err);
+                updateStatus('Error: ' + err.type, false);
+                if (err.type === 'unavailable-id') {
+                    alert('Peer ID "' + id + '" is taken. Try a different one.');
+                }
+            });
+
+            peer.on('disconnected', () => {
+                updateStatus('Disconnected', false);
+                updateConnectionInfo('PeerJS · disconnected');
+                connectPeerBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+                fullReset();
+            });
+
+            // ----- Incoming call -----
+            peer.on('call', (incomingCall) => {
+                if (isCallActive) {
+                    incomingCall.answer(); // reject
+                    return;
+                }
+                if (!localStream) {
+                    alert('No local stream. Start local first.');
+                    return;
+                }
+                // answer the call
+                call = incomingCall;
+                call.answer(localStream);
+                setupCallListeners(call);
+                remotePeerId = incomingCall.peer;
+                isCallActive = true;
+                setButtons(true);
+                updateStatus('Incoming call answered', true);
+                updateConnectionInfo('🔗 Connected to ' + remotePeerId);
+                // show remote placeholder until stream arrives
+                remotePlaceholder.style.display = 'flex';
+                remotePlaceholder.innerHTML = '<i class="fas fa-spinner fa-pulse"></i>';
+            });
+        }
+
+        // ---------- Setup call listeners ----------
+        function setupCallListeners(mediaCall) {
+            mediaCall.on('stream', (remoteStreamObj) => {
                 if (!remoteStream) {
                     remoteStream = new MediaStream();
                     remoteVideo.srcObject = remoteStream;
                 }
-                remoteStream.addTrack(event.track);
+                remoteStream.addTrack(remoteStreamObj.getTracks()[0]);
+                remoteStreamObj.getTracks().forEach(t => {
+                    if (!remoteStream.getTracks().find(rt => rt.id === t.id)) {
+                        remoteStream.addTrack(t);
+                    }
+                });
                 remotePlaceholder.style.display = 'none';
-                updateStatus('Connected');
-                updateConnectionInfo('🔗 Peer connected');
-            };
+                updateStatus('Connected', true);
+                updateConnectionInfo('🔗 Active call with ' + remotePeerId);
+            });
 
-            // ICE candidate logging
-            pc.onicecandidate = (e) => {
-                if (e.candidate) {
-                    console.log('ICE candidate:', e.candidate);
-                }
-            };
-
-            pc.onconnectionstatechange = () => {
-                const state = pc.connectionState;
-                console.log('Connection state:', state);
-                if (state === 'connected') {
-                    updateStatus('Connected');
-                    updateConnectionInfo('✅ Active call');
-                } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
-                    if (isCallActive) {
-                        updateStatus('Disconnected');
-                        updateConnectionInfo('⚠️ Call ended');
-                        hangUp();
-                    }
-                }
-            };
-
-            pc.oniceconnectionstatechange = () => {
-                console.log('ICE state:', pc.iceConnectionState);
-            };
-
-            return pc;
-        }
-
-        // ----- offer / answer logic (simplified: offer from caller) -----
-        async function startCall() {
-            if (isCallActive) {
-                alert('Call already active');
-                return;
-            }
-            if (!localStream) {
-                const started = await startLocalStream();
-                if (!started) return;
-            }
-            // ensure video/audio tracks exist in localStream
-            try {
-                peerConnection = await createPeerConnection(localStream);
-                const offer = await peerConnection.createOffer();
-                await peerConnection.setLocalDescription(offer);
-                // in a real app you would send this offer to remote via signaling.
-                // For demo, we simulate answer by creating an answer locally (echo mode)
-                // But we want a 2-way call, so we create a fake remote answer.
-                // Since this is a single-page demo, we simulate both sides.
-                // For a true p2p, you would exchange via signaling server.
-                // Here we create a second peer connection as "remote" to simulate.
-                // This is a hack for demo: we establish a loopback call.
-                simulateRemoteAnswer(peerConnection);
-                isCallActive = true;
-                setButtons(true);
-                updateStatus('Calling...');
-                updateConnectionInfo('⏳ Connecting...');
-            } catch (err) {
-                console.error('Offer error:', err);
-                alert('Could not start call: ' + err.message);
+            mediaCall.on('close', () => {
                 hangUp();
-            }
-        }
+            });
 
-        // ----- simulate remote answer (for demo) -----
-        async function simulateRemoteAnswer(offerPC) {
-            try {
-                const offerDesc = offerPC.localDescription;
-                // Create a "remote" peer connection
-                const remotePC = new RTCPeerConnection(rtcConfig);
-                // When remotePC receives tracks, we add to remoteVideo
-                remotePC.ontrack = (event) => {
-                    if (!remoteStream) {
-                        remoteStream = new MediaStream();
-                        remoteVideo.srcObject = remoteStream;
-                    }
-                    remoteStream.addTrack(event.track);
-                    remotePlaceholder.style.display = 'none';
-                };
-                // Also add local tracks to remotePC (to simulate both directions)
-                if (localStream) {
-                    localStream.getTracks().forEach(track => {
-                        remotePC.addTrack(track, localStream);
-                    });
-                }
-                // Set remote description
-                await remotePC.setRemoteDescription(offerDesc);
-                const answer = await remotePC.createAnswer();
-                await remotePC.setLocalDescription(answer);
-                // set remote description on offerPC
-                await offerPC.setRemoteDescription(answer);
-                // store remotePC to close later
-                window.__remotePC = remotePC;
-                updateStatus('Connected (loopback)');
-                updateConnectionInfo('🔁 Loopback call (demo)');
-                // we have both streams
-            } catch (e) {
-                console.error('Simulate answer error:', e);
-                alert('Loopback error: ' + e.message);
+            mediaCall.on('error', (err) => {
+                console.error('Call error:', err);
                 hangUp();
-            }
+            });
         }
 
-        // ----- hang up -----
+        // ---------- Make outgoing call ----------
+        function makeCall() {
+            if (!peer) { alert('Connect to PeerJS first'); return; }
+            if (!localStream) { alert('Start local stream first'); return; }
+            const targetId = prompt('Enter the remote Peer ID to call:');
+            if (!targetId) return;
+            remotePeerId = targetId.trim();
+            if (!remotePeerId) return;
+
+            // data connection for simple signaling (optional)
+            connection = peer.connect(remotePeerId);
+            connection.on('open', () => {
+                console.log('Data connection open');
+            });
+
+            const mediaCall = peer.call(remotePeerId, localStream);
+            call = mediaCall;
+            setupCallListeners(mediaCall);
+            isCallActive = true;
+            setButtons(true);
+            updateStatus('Calling ' + remotePeerId + '...', true);
+            updateConnectionInfo('⏳ Calling ' + remotePeerId);
+            remotePlaceholder.style.display = 'flex';
+            remotePlaceholder.innerHTML = '<i class="fas fa-spinner fa-pulse"></i>';
+        }
+
+        // ---------- Hang up ----------
         function hangUp() {
-            if (window.__remotePC) {
-                window.__remotePC.close();
-                window.__remotePC = null;
+            if (call) {
+                call.close();
+                call = null;
             }
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
+            if (connection) {
+                connection.close();
+                connection = null;
             }
             if (remoteStream) {
                 remoteStream.getTracks().forEach(t => t.stop());
                 remoteStream = null;
                 remoteVideo.srcObject = null;
-                remotePlaceholder.style.display = 'flex';
-                remotePlaceholder.innerHTML = '<i class="fas fa-video-slash"></i>';
             }
-            if (localStream) {
-                // keep local stream for reuse
-                localVideo.srcObject = localStream;
-            }
+            remotePlaceholder.style.display = 'flex';
+            remotePlaceholder.innerHTML = '<i class="fas fa-video-slash"></i>';
             isCallActive = false;
             setButtons(false);
-            updateStatus('Ready');
-            updateConnectionInfo('WebRTC · idle');
+            updateStatus(peer ? 'Ready' : 'Offline', !!peer);
+            updateConnectionInfo(peer ? 'PeerJS · idle' : 'PeerJS · not connected');
+            remotePeerId = '';
         }
 
-        // ----- toggle video -----
+        // ---------- Toggle video / audio ----------
         function toggleVideo() {
-            if (!localStream) {
-                alert('Start local stream first');
-                return;
-            }
+            if (!localStream) { alert('Start local stream first'); return; }
             const videoTracks = localStream.getVideoTracks();
-            if (videoTracks.length === 0) {
-                // try to add video
-                alert('No video track, restart with video');
-                return;
-            }
+            if (videoTracks.length === 0) { alert('No video track'); return; }
             isVideoEnabled = !isVideoEnabled;
-            videoTracks.forEach(track => track.enabled = isVideoEnabled);
+            videoTracks.forEach(t => track.enabled = isVideoEnabled);
             toggleVideoBtn.innerHTML = isVideoEnabled ? '<i class="fas fa-video"></i> Video' : '<i class="fas fa-video-slash"></i> Video';
             localPlaceholder.style.display = isVideoEnabled ? 'none' : 'flex';
-            if (!isVideoEnabled) {
-                localPlaceholder.innerHTML = '<i class="fas fa-camera"></i>';
-            } else {
-                localPlaceholder.style.display = 'none';
-            }
+            if (!isVideoEnabled) localPlaceholder.innerHTML = '<i class="fas fa-camera"></i>';
+            else localPlaceholder.style.display = 'none';
         }
 
-        // ----- toggle audio -----
         function toggleAudio() {
-            if (!localStream) {
-                alert('Start local stream first');
-                return;
-            }
+            if (!localStream) { alert('Start local stream first'); return; }
             const audioTracks = localStream.getAudioTracks();
             if (audioTracks.length === 0) return;
             isAudioEnabled = !isAudioEnabled;
-            audioTracks.forEach(track => track.enabled = isAudioEnabled);
+            audioTracks.forEach(t => t.enabled = isAudioEnabled);
             toggleAudioBtn.innerHTML = isAudioEnabled ? '<i class="fas fa-microphone"></i>' : '<i class="fas fa-microphone-slash"></i>';
         }
 
-        // ----- reset everything -----
-        function resetAll() {
-            hangUp();
-            if (localStream) {
-                localStream.getTracks().forEach(t => t.stop());
-                localStream = null;
+        // ---------- Copy peer ID ----------
+        function copyPeerId() {
+            const id = peerIdInput.value;
+            if (!id) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(id).then(() => {
+                    alert('Peer ID copied: ' + id);
+                }).catch(() => {
+                    fallbackCopy(id);
+                });
+            } else {
+                fallbackCopy(id);
             }
-            localVideo.srcObject = null;
-            remoteVideo.srcObject = null;
-            localPlaceholder.style.display = 'flex';
-            localPlaceholder.innerHTML = '<i class="fas fa-camera"></i>';
-            remotePlaceholder.style.display = 'flex';
-            remotePlaceholder.innerHTML = '<i class="fas fa-video-slash"></i>';
-            isVideoEnabled = true;
-            isAudioEnabled = true;
-            toggleVideoBtn.innerHTML = '<i class="fas fa-video"></i> Video';
-            toggleAudioBtn.innerHTML = '<i class="fas fa-microphone"></i>';
-            updateStatus('Ready');
-            updateConnectionInfo('WebRTC · idle');
-            setButtons(false);
+        }
+        function fallbackCopy(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            alert('Copied: ' + text);
         }
 
-        // ----- event bindings -----
-        callBtn.addEventListener('click', startCall);
+        // ---------- Event bindings ----------
+        connectPeerBtn.addEventListener('click', connectPeer);
+        copyIdBtn.addEventListener('click', copyPeerId);
+        callBtn.addEventListener('click', makeCall);
         hangupBtn.addEventListener('click', hangUp);
         toggleVideoBtn.addEventListener('click', toggleVideo);
         toggleAudioBtn.addEventListener('click', toggleAudio);
@@ -654,25 +656,22 @@
             await startLocalStream();
         });
 
-        resetIcon.addEventListener('click', resetAll);
-
-        // auto-start local stream on page load for better UX
-        window.addEventListener('load', () => {
-            setTimeout(async () => {
-                await startLocalStream();
-                updateStatus('Ready');
-            }, 300);
-        });
-
-        // handle visibility change to avoid issues
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden && localStream) {
-                // optional: mute or pause
+        resetIcon.addEventListener('click', () => {
+            if (confirm('Reset everything? This will disconnect.')) {
+                fullReset();
+                connectPeerBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
             }
         });
 
+        // auto-connect with default ID on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                connectPeer();
+            }, 400);
+        });
+
         // expose for debugging
-        window.__reset = resetAll;
+        window.__reset = fullReset;
         window.__hangup = hangUp;
     })();
 </script>
