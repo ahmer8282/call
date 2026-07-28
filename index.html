@@ -84,6 +84,13 @@
             word-break: break-all;
             flex: 1;
             min-width: 80px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+        .peer-row .my-id:hover {
+            background: #2a3045;
         }
         .peer-row .btn-sm {
             background: #3f4b6b;
@@ -318,7 +325,7 @@
 
     <!-- My Peer ID -->
     <div class="peer-row">
-        <span class="my-id" id="myIdDisplay">⚡ connecting...</span>
+        <span class="my-id" id="myIdDisplay" title="Click to edit">⚡ connecting...</span>
         <button class="btn-sm" id="connectBtn"><i class="fas fa-plug"></i> Go online</button>
         <button class="btn-sm" id="copyBtn"><i class="far fa-copy"></i></button>
     </div>
@@ -401,6 +408,27 @@
         let isOnline = false;
         let currentMode = 'caller';
 
+        // ----- Persistent ID -----
+        const STORAGE_KEY = 'walkietalk_peer_id';
+        
+        function getStoredId() {
+            try {
+                return localStorage.getItem(STORAGE_KEY) || null;
+            } catch(e) {
+                return null;
+            }
+        }
+
+        function storeId(id) {
+            try {
+                localStorage.setItem(STORAGE_KEY, id);
+            } catch(e) {}
+        }
+
+        function generateId() {
+            return 'wt-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+        }
+
         // ----- Audio output routing -----
         async function setAudioOutput(deviceId) {
             try {
@@ -420,25 +448,19 @@
             isSpeakerOn = !isSpeakerOn;
             
             try {
-                // Get available audio output devices
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
                 
                 let targetDeviceId = 'default';
                 if (isSpeakerOn) {
-                    // Try to find a speaker device (non-default, usually has 'speaker' in label)
                     const speakerDevice = audioOutputs.find(d => 
                         d.label && d.label.toLowerCase().includes('speaker')
                     );
                     if (speakerDevice) {
                         targetDeviceId = speakerDevice.deviceId;
                     } else if (audioOutputs.length > 1) {
-                        // Use the second device as speaker
                         targetDeviceId = audioOutputs[1].deviceId;
                     }
-                } else {
-                    // Default/earpiece
-                    targetDeviceId = 'default';
                 }
                 
                 const success = await setAudioOutput(targetDeviceId);
@@ -447,14 +469,12 @@
                     speakerBtn.innerHTML = isSpeakerOn ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-off"></i>';
                     updateInfo(isSpeakerOn ? '🔊 Speaker mode' : '🔇 Earpiece mode');
                 } else {
-                    // Fallback: just toggle icon without changing device
                     speakerBtn.classList.toggle('active', isSpeakerOn);
                     speakerBtn.innerHTML = isSpeakerOn ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-off"></i>';
                     updateInfo(isSpeakerOn ? '🔊 Speaker mode (simulated)' : '🔇 Earpiece mode (simulated)');
                 }
             } catch (err) {
                 console.warn('Speaker toggle error:', err);
-                // Still toggle UI for user feedback
                 speakerBtn.classList.toggle('active', isSpeakerOn);
                 speakerBtn.innerHTML = isSpeakerOn ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-off"></i>';
             }
@@ -588,13 +608,19 @@
             }
         }
 
-        // ----- Connect Peer -----
+        // ----- Connect Peer (with persistent ID) -----
         function connectPeer() {
             if (peer) {
                 peer.destroy();
                 peer = null;
             }
-            const id = 'wt-' + Math.floor(Math.random() * 100000);
+
+            // Get stored ID or generate new one
+            let id = getStoredId();
+            if (!id) {
+                id = generateId();
+                storeId(id);
+            }
             myPeerId = id;
             myIdDisplay.innerText = id;
 
@@ -613,6 +639,8 @@
             peer.on('open', (id) => {
                 myPeerId = id;
                 myIdDisplay.innerText = id;
+                // Store the ID in case it was different (e.g., server assigned)
+                storeId(id);
                 isOnline = true;
                 updateStatus('Ready', true);
                 updateInfo(currentMode === 'caller' ? 'Enter ID and call' : 'Waiting for incoming call...');
@@ -629,7 +657,10 @@
             peer.on('error', (err) => {
                 console.error('Peer error:', err);
                 if (err.type === 'unavailable-id') {
-                    alert('ID "' + id + '" is taken. Retrying...');
+                    // ID is taken, generate a new one and retry
+                    const newId = generateId();
+                    storeId(newId);
+                    alert('ID "' + myPeerId + '" is taken. New ID: ' + newId);
                     connectPeer();
                 } else {
                     updateStatus('Error', false);
@@ -699,7 +730,6 @@
                 updateStatus('Connected', true);
                 updateInfo('🔗 Active with ' + remotePeerId);
                 
-                // Auto-switch to speaker on call start (for better experience)
                 if (!isSpeakerOn) {
                     setTimeout(() => {
                         toggleSpeaker();
@@ -765,7 +795,6 @@
                 remotePlaceholder.style.display = 'flex';
             }
             
-            // Reset audio to default
             try {
                 setAudioOutput('default');
             } catch(e) {}
@@ -811,6 +840,30 @@
             alert('Copied: ' + text);
         }
 
+        // ----- Edit ID (click to change) -----
+        function editId() {
+            const currentId = myIdDisplay.innerText;
+            if (currentId.includes('⚡')) return;
+            const newId = prompt('Enter your Peer ID (must be unique):', currentId);
+            if (newId && newId.trim() !== '' && newId !== currentId) {
+                const trimmed = newId.trim();
+                // Store new ID and reconnect
+                storeId(trimmed);
+                if (peer) {
+                    peer.destroy();
+                    peer = null;
+                }
+                isOnline = false;
+                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Go online';
+                myIdDisplay.innerText = trimmed;
+                updateStatus('Offline', false);
+                updateInfo('Reconnecting with new ID...');
+                setTimeout(() => {
+                    connectPeer();
+                }, 300);
+            }
+        }
+
         // ----- Mode switching -----
         function setMode(mode) {
             currentMode = mode;
@@ -850,6 +903,7 @@
         toggleVideoBtn.addEventListener('click', toggleVideo);
         toggleAudioBtn.addEventListener('click', toggleAudio);
         speakerBtn.addEventListener('click', toggleSpeaker);
+        myIdDisplay.addEventListener('click', editId);
 
         modeBtns.forEach(btn => {
             btn.addEventListener('click', () => {
