@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>P2P Walkie-Talkie Call</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         :root {
             --bg-color: #121212;
@@ -17,9 +18,7 @@
             --text-secondary: #8e8e93;
         }
 
-        * {
-            box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
 
         html, body {
             margin: 0;
@@ -34,7 +33,6 @@
             color: var(--text);
             display: flex;
             flex-direction: column;
-            /* Use dvh for mobile browsers, with vh fallback */
             height: 100vh;
             height: 100dvh;
         }
@@ -75,7 +73,6 @@
         .controls {
             background: var(--card-bg);
             padding: 15px;
-            /* Safe area for iPhone notch/home indicator */
             padding-bottom: calc(15px + env(safe-area-inset-bottom));
             display: flex;
             flex-direction: column;
@@ -84,29 +81,63 @@
             border-top-right-radius: 16px;
             box-shadow: 0 -4px 12px rgba(0,0,0,0.5);
             flex-shrink: 0;
+            max-height: 45vh;
+            overflow-y: auto;
         }
 
-        .room-input {
+        .room-code-display {
+            background: rgba(0, 122, 255, 0.1);
+            border: 2px solid var(--primary);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .room-code-display label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .room-code-display .code {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--primary);
+            font-family: monospace;
+            letter-spacing: 4px;
+        }
+
+        .share-buttons {
             display: flex;
-            flex-direction: column;
             gap: 8px;
         }
 
-        .room-input label {
-            font-size: 13px;
-            color: var(--text-secondary);
+        .share-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
 
-        input {
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.2);
-            background: rgba(255,255,255,0.05);
-            color: white;
-            font-size: 16px;
-            text-align: center;
-            font-weight: 600;
-            width: 100%;
+        .share-btn.copy { background: var(--primary); }
+        .share-btn.qr { background: var(--warning); }
+
+        .qr-container {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         button {
@@ -138,7 +169,6 @@
 
         .hidden { display: none !important; }
 
-        /* Walkie-Talkie Style Controls */
         .walkie-controls {
             display: flex;
             flex-direction: column;
@@ -180,9 +210,7 @@
             box-shadow: 0 0 15px rgba(52, 199, 89, 0.4);
         }
 
-        .ptt-button:active {
-            transform: scale(0.95);
-        }
+        .ptt-button:active { transform: scale(0.95); }
 
         .action-row {
             display: flex;
@@ -195,27 +223,34 @@
             font-size: 13px;
         }
 
-        /* Landscape mode adjustments */
+        .toast {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            font-size: 16px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        .toast.show { opacity: 1; }
+
         @media (orientation: landscape) and (max-height: 500px) {
-            .video-container {
-                flex: 1;
-            }
-            
             .controls {
                 padding: 10px;
                 padding-bottom: calc(10px + env(safe-area-inset-bottom));
                 gap: 8px;
+                max-height: 50vh;
             }
-            
-            .ptt-button {
-                padding: 12px;
-                font-size: 16px;
-            }
-            
-            #localVideo {
-                width: 60px;
-                height: 80px;
-            }
+            .ptt-button { padding: 12px; font-size: 16px; }
+            #localVideo { width: 60px; height: 80px; }
+            .room-code-display .code { font-size: 24px; }
         }
     </style>
 </head>
@@ -228,12 +263,23 @@
 
     <!-- ROOM SETUP SCREEN -->
     <div class="controls" id="setupScreen">
-        <div class="status">Enter a room name to connect</div>
-        <div class="room-input">
-            <label>Room Name (both people enter the same):</label>
-            <input type="text" id="roomInput" placeholder="e.g., 123, office, home" maxlength="20">
+        <div class="status">Your Room Code:</div>
+        
+        <div class="room-code-display">
+            <label>Share this code or link:</label>
+            <div class="code" id="roomCode">----</div>
         </div>
-        <button class="btn-primary" id="joinBtn">Join Room</button>
+
+        <div class="share-buttons">
+            <button class="share-btn copy" id="copyLinkBtn">📋 Copy Link</button>
+            <button class="share-btn qr" id="showQrBtn">📱 Show QR</button>
+        </div>
+
+        <div class="qr-container hidden" id="qrContainer">
+            <div id="qrcode"></div>
+        </div>
+
+        <button class="btn-success" id="joinBtn">📹 Start Camera & Join</button>
     </div>
 
     <!-- CALL SCREEN -->
@@ -257,10 +303,12 @@
         </div>
     </div>
 
+    <div class="toast" id="toast"></div>
+
     <script>
         const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
-        const roomInput = document.getElementById('roomInput');
+        const roomCodeDisplay = document.getElementById('roomCode');
         const joinBtn = document.getElementById('joinBtn');
         const setupScreen = document.getElementById('setupScreen');
         const callScreen = document.getElementById('callScreen');
@@ -271,6 +319,10 @@
         const pttText = document.getElementById('pttText');
         const camBtn = document.getElementById('camBtn');
         const hangupBtn = document.getElementById('hangupBtn');
+        const copyLinkBtn = document.getElementById('copyLinkBtn');
+        const showQrBtn = document.getElementById('showQrBtn');
+        const qrContainer = document.getElementById('qrContainer');
+        const toast = document.getElementById('toast');
 
         let peer;
         let localStream;
@@ -279,6 +331,30 @@
         let myUserId;
         let otherUserId;
         let isMyTurnToInitiate = true;
+        let qrCode = null;
+
+        // Generate random 4-character code
+        function generateRoomCode() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let code = '';
+            for (let i = 0; i < 4; i++) {
+                code += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return code;
+        }
+
+        // Get room from URL or generate new one
+        function getRoomFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('room')?.toUpperCase();
+        }
+
+        // Show toast message
+        function showToast(message) {
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2000);
+        }
 
         // Generate user ID based on room
         function generateUserId(room) {
@@ -290,28 +366,78 @@
             return `${room}-user${userNum}`;
         }
 
-        // Join room
-        joinBtn.addEventListener('click', async () => {
-            const room = roomInput.value.trim().toLowerCase();
-            if (!room) {
-                alert('Please enter a room name');
-                return;
+        // Initialize room
+        function initRoom() {
+            myRoom = getRoomFromUrl() || generateRoomCode();
+            roomCodeDisplay.textContent = myRoom;
+            
+            // Update URL with room code
+            if (!getRoomFromUrl()) {
+                const newUrl = `${window.location.origin}${window.location.pathname}?room=${myRoom}`;
+                window.history.replaceState({}, '', newUrl);
             }
 
-            myRoom = room;
-            myUserId = generateUserId(room);
+            myUserId = generateUserId(myRoom);
             
             if (myUserId.endsWith('user1')) {
-                otherUserId = `${room}-user2`;
+                otherUserId = `${myRoom}-user2`;
                 isMyTurnToInitiate = true;
             } else {
-                otherUserId = `${room}-user1`;
+                otherUserId = `${myRoom}-user1`;
                 isMyTurnToInitiate = false;
             }
+        }
 
-            currentRoomDisplay.textContent = room;
+        // Copy link to clipboard
+        copyLinkBtn.addEventListener('click', async () => {
+            const shareUrl = `${window.location.origin}${window.location.pathname}?room=${myRoom}`;
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                showToast('✅ Link copied!');
+            } catch (err) {
+                // Fallback for iOS
+                const textArea = document.createElement('textarea');
+                textArea.value = shareUrl;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast('✅ Link copied!');
+                } catch (err) {
+                    showToast('❌ Copy failed');
+                }
+                document.body.removeChild(textArea);
+            }
+        });
+
+        // Show/hide QR code
+        showQrBtn.addEventListener('click', () => {
+            if (qrContainer.classList.contains('hidden')) {
+                const shareUrl = `${window.location.origin}${window.location.pathname}?room=${myRoom}`;
+                if (!qrCode) {
+                    qrCode = new QRCode(document.getElementById('qrcode'), {
+                        text: shareUrl,
+                        width: 180,
+                        height: 180,
+                        colorDark: '#000000',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                }
+                qrContainer.classList.remove('hidden');
+                showQrBtn.textContent = '📱 Hide QR';
+            } else {
+                qrContainer.classList.add('hidden');
+                showQrBtn.textContent = '📱 Show QR';
+            }
+        });
+
+        // Join room
+        joinBtn.addEventListener('click', async () => {
             joinBtn.disabled = true;
-            joinBtn.textContent = 'Connecting...';
+            joinBtn.textContent = '⏳ Starting camera...';
 
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ 
@@ -320,4 +446,152 @@
                 });
                 localVideo.srcObject = localStream;
                 
-                localStream.getAudioTracks()[0].enabled
+                // Start muted by default
+                localStream.getAudioTracks()[0].enabled = false;
+                
+                camBtn.disabled = false;
+                currentRoomDisplay.textContent = myRoom;
+                
+                setupScreen.classList.add('hidden');
+                callScreen.classList.remove('hidden');
+                
+                initPeer();
+            } catch (err) {
+                alert('Camera/Mic access denied. Please allow permissions.');
+                joinBtn.disabled = false;
+                joinBtn.textContent = '📹 Start Camera & Join';
+            }
+        });
+
+        // Initialize PeerJS
+        function initPeer() {
+            peer = new Peer(myUserId);
+
+            peer.on('open', id => {
+                statusCall.textContent = `Waiting for other person in room "${myRoom}"...`;
+                
+                if (isMyTurnToInitiate) {
+                    setTimeout(() => {
+                        if (!currentCall) {
+                            statusCall.textContent = 'Trying to connect...';
+                            const call = peer.call(otherUserId, localStream);
+                            handleCall(call);
+                        }
+                    }, 2000);
+                }
+            });
+
+            peer.on('call', call => {
+                statusCall.textContent = 'Connected!';
+                call.answer(localStream);
+                handleCall(call);
+            });
+
+            peer.on('error', err => {
+                console.error('PeerJS error:', err);
+                if (err.type === 'unavailable-id') {
+                    statusCall.textContent = 'Room is full. Try a different room name.';
+                } else if (err.type === 'peer-unavailable') {
+                    statusCall.textContent = `Waiting for other person in room "${myRoom}"...`;
+                    setTimeout(() => {
+                        if (!currentCall && peer && !peer.destroyed) {
+                            const call = peer.call(otherUserId, localStream);
+                            handleCall(call);
+                        }
+                    }, 3000);
+                } else {
+                    statusCall.textContent = 'Error: ' + err.type;
+                }
+            });
+        }
+
+        // Handle call
+        function handleCall(call) {
+            currentCall = call;
+
+            call.on('stream', remoteStream => {
+                remoteVideo.srcObject = remoteStream;
+                statusCall.textContent = 'Connected!';
+            });
+
+            call.on('close', () => {
+                endCall();
+            });
+            
+            call.on('error', err => {
+                console.error('Call error:', err);
+                statusCall.textContent = 'Call disconnected. Waiting to reconnect...';
+                currentCall = null;
+                
+                setTimeout(() => {
+                    if (peer && !peer.destroyed) {
+                        const newCall = peer.call(otherUserId, localStream);
+                        handleCall(newCall);
+                    }
+                }, 3000);
+            });
+        }
+
+        // Push-to-talk button
+        pttBtn.addEventListener('click', () => {
+            if (!localStream) return;
+            const audioTrack = localStream.getAudioTracks()[0];
+            audioTrack.enabled = !audioTrack.enabled;
+            
+            if (audioTrack.enabled) {
+                pttBtn.classList.remove('muted');
+                pttBtn.classList.add('unmuted');
+                pttIcon.textContent = '🎤';
+                pttText.textContent = 'TAP TO MUTE';
+            } else {
+                pttBtn.classList.remove('unmuted');
+                pttBtn.classList.add('muted');
+                pttIcon.textContent = '🔇';
+                pttText.textContent = 'TAP TO TALK';
+            }
+        });
+
+        // Camera toggle
+        camBtn.addEventListener('click', () => {
+            if (!localStream) return;
+            const videoTrack = localStream.getVideoTracks()[0];
+            videoTrack.enabled = !videoTrack.enabled;
+            camBtn.textContent = videoTrack.enabled ? '📹 Camera ON' : '📺 Camera OFF';
+            camBtn.className = videoTrack.enabled ? 'btn-success' : 'btn-danger';
+        });
+
+        // Hangup
+        hangupBtn.addEventListener('click', () => {
+            if (currentCall) {
+                currentCall.close();
+            }
+            if (peer) {
+                peer.destroy();
+            }
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            location.reload();
+        });
+
+        function endCall() {
+            if (currentCall) {
+                currentCall.close();
+                currentCall = null;
+            }
+            remoteVideo.srcObject = null;
+            statusCall.textContent = 'Disconnected. Waiting to reconnect...';
+            
+            setTimeout(() => {
+                if (peer && !peer.destroyed) {
+                    const call = peer.call(otherUserId, localStream);
+                    handleCall(call);
+                }
+            }, 3000);
+        }
+
+        // Initialize on load
+        initRoom();
+    </script>
+</body>
+</html>
