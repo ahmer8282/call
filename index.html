@@ -261,7 +261,6 @@
         <video id="localVideo" autoplay playsinline muted></video>
     </div>
 
-    <!-- ROOM SETUP SCREEN -->
     <div class="controls" id="setupScreen">
         <div class="status">Your Room Code:</div>
         
@@ -282,7 +281,6 @@
         <button class="btn-success" id="joinBtn">📹 Start Camera & Join</button>
     </div>
 
-    <!-- CALL SCREEN -->
     <div class="controls hidden" id="callScreen">
         <div class="walkie-controls">
             <div class="room-display">
@@ -333,7 +331,6 @@
         let myUserId;
         let otherUserId;
         let qrCode = null;
-        let retryTimeout = null;
 
         function generateRoomCode() {
             const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -425,15 +422,39 @@
             joinBtn.textContent = '⏳ Starting camera...';
 
             try {
+                // Get media with explicit constraints
                 localStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'user', width: 640, height: 480 }, 
-                    audio: true 
+                    video: { 
+                        facingMode: 'user',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }, 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
                 });
+                
+                console.log('Local stream tracks:', localStream.getTracks());
+                
+                // Verify video track is active
+                const videoTrack = localStream.getVideoTracks()[0];
+                if (videoTrack) {
+                    console.log('Video track settings:', videoTrack.getSettings());
+                    console.log('Video track enabled:', videoTrack.enabled);
+                }
+                
                 localVideo.srcObject = localStream;
                 
-                // Explicitly play the video (required for iOS)
-                await localVideo.play();
+                // Explicitly play the video
+                try {
+                    await localVideo.play();
+                    console.log('Local video playing');
+                } catch (playErr) {
+                    console.error('Local video play error:', playErr);
+                }
                 
+                // Start with audio muted
                 localStream.getAudioTracks()[0].enabled = false;
                 
                 camBtn.disabled = false;
@@ -445,14 +466,25 @@
                 initPeer();
             } catch (err) {
                 console.error('Media error:', err);
-                alert('Camera/Mic access denied. Please allow permissions.');
+                alert('Camera/Mic access denied: ' + err.message);
                 joinBtn.disabled = false;
                 joinBtn.textContent = '📹 Start Camera & Join';
             }
         });
 
         function initPeer() {
-            peer = new Peer(myUserId);
+            // Use explicit ICE servers for better connectivity
+            peer = new Peer(myUserId, {
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' }
+                    ]
+                }
+            });
 
             peer.on('open', id => {
                 console.log('PeerJS connected:', id);
@@ -486,11 +518,15 @@
             statusCall.textContent = 'Connected!';
 
             call.on('stream', remoteStream => {
-                console.log('Received remote stream');
+                console.log('Received remote stream:', remoteStream);
+                console.log('Remote tracks:', remoteStream.getTracks());
+                
                 remoteVideo.srcObject = remoteStream;
                 
-                // Explicitly play remote video (critical for iOS)
-                remoteVideo.play().catch(err => {
+                // Explicitly play remote video
+                remoteVideo.play().then(() => {
+                    console.log('Remote video playing');
+                }).catch(err => {
                     console.error('Remote video play error:', err);
                 });
             });
@@ -508,9 +544,11 @@
             });
         }
 
-        // Manual call button
         callBtn.addEventListener('click', () => {
             if (!peer || !localStream) return;
+            
+            console.log('Initiating call to:', otherUserId);
+            console.log('Sending stream:', localStream);
             
             statusCall.textContent = 'Calling...';
             callBtn.disabled = true;
