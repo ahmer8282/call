@@ -1,662 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>📡 WalkieTalk · Dual Panel</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Direct Walkie-Talkie</title>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        :root {
+            --bg-color: #121212;
+            --card-bg: rgba(30, 30, 30, 0.95);
+            --primary: #007aff;
+            --danger: #ff3b30;
+            --success: #34c759;
+            --warning: #ff9500;
+            --text: #ffffff;
+            --text-secondary: #8e8e93;
         }
-        body {
-            background: #0e111b;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 12px;
-            touch-action: manipulation;
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0; padding: 0; height: 100%; overflow: hidden;
+            background-color: var(--bg-color); color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
-        .app-wrapper {
-            max-width: 960px;
-            width: 100%;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
+        body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+        .video-container {
+            flex: 1; position: relative; background: #000;
+            display: flex; align-items: center; justify-content: center;
+            min-height: 0; overflow: hidden;
         }
-        @media (max-width: 700px) {
-            .app-wrapper {
-                grid-template-columns: 1fr;
-                gap: 24px;
-            }
+        video { width: 100%; height: 100%; object-fit: cover; background: #000; }
+        #remoteVideo { z-index: 1; }
+        #localVideo {
+            position: absolute; bottom: 15px; right: 15px;
+            width: 90px; height: 120px; border-radius: 10px;
+            border: 2px solid rgba(255,255,255,0.3); z-index: 2;
+            object-fit: cover; transform: scaleX(-1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
-        .panel {
-            background: #1a1e2c;
-            border-radius: 40px;
-            padding: 20px 16px 24px;
-            border: 1px solid #31384d;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.5);
-        }
-        .panel-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            color: #c8d0e6;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #2f3649;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-        .panel-header h2 {
-            font-size: 1.1rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .panel-header h2 i { color: #f5b042; }
-        .status-badge {
-            background: #2e354a;
-            padding: 4px 14px;
-            border-radius: 40px;
-            font-size: 0.65rem;
-            font-weight: 500;
-            color: #aab3d0;
-            border: 1px solid #3d455e;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .status-badge i { color: #4caf84; font-size: 0.5rem; }
-        .status-badge.off i { color: #e74c5e; }
-
-        .peer-box {
-            background: #11141f;
-            border-radius: 60px;
-            padding: 8px 14px;
-            margin: 10px 0 12px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            border: 1px solid #2d3447;
-            flex-wrap: wrap;
-        }
-        .peer-box .id-display {
-            color: #bcc8f0;
-            font-size: 0.85rem;
-            font-weight: 500;
-            font-family: monospace;
-            word-break: break-all;
-            flex: 1;
-            min-width: 80px;
-        }
-        .peer-box .btn-sm {
-            background: #3f4b6b;
-            border: none;
-            border-radius: 40px;
-            padding: 6px 16px;
-            color: white;
-            font-weight: 600;
-            font-size: 0.7rem;
-            cursor: pointer;
-            border: 1px solid #5b6890;
-            box-shadow: 0 3px 0 #1f263a;
-            transition: 0.06s linear;
-            touch-action: manipulation;
-            white-space: nowrap;
-        }
-        .peer-box .btn-sm:active { transform: translateY(3px); box-shadow: 0 0px 0 #1f263a; }
-        .peer-box .btn-sm:disabled { opacity: 0.4; transform: translateY(2px); box-shadow: 0 1px 0 #1f263a; pointer-events: none; }
-
-        .video-grid {
-            margin: 10px 0 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .video-box {
-            background: #0b0d16;
-            border-radius: 20px;
-            overflow: hidden;
-            position: relative;
-            aspect-ratio: 16/9;
-            border: 2px solid #2a3045;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .video-box video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            background: #080a12;
-            display: block;
-        }
-        .video-box .label {
-            position: absolute;
-            bottom: 8px;
-            left: 10px;
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(4px);
-            padding: 2px 12px;
-            border-radius: 40px;
-            font-size: 0.6rem;
-            font-weight: 500;
-            color: #d0d8f0;
-            border: 1px solid #4b536e;
-            pointer-events: none;
-        }
-        .video-box .label.right { left: auto; right: 10px; }
-        .video-box .placeholder {
-            color: #3d455e;
-            font-size: 2.6rem;
-            opacity: 0.5;
-            position: absolute;
-        }
-
         .controls {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            margin: 6px 0 10px;
+            background: var(--card-bg); backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px); padding: 15px;
+            padding-bottom: calc(15px + env(safe-area-inset-bottom));
+            display: flex; flex-direction: column; gap: 12px;
+            border-top-left-radius: 20px; border-top-right-radius: 20px;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.6);
+            flex-shrink: 0; max-height: 45vh; overflow-y: auto;
         }
-        .btn {
-            background: #2f3649;
-            border: none;
-            border-radius: 60px;
-            padding: 8px 14px;
-            color: #d3daf5;
-            font-weight: 600;
-            font-size: 0.75rem;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            cursor: pointer;
-            border: 1px solid #414a63;
-            box-shadow: 0 4px 0 #141824;
-            transition: 0.06s linear;
-            touch-action: manipulation;
-            flex: 1 1 auto;
-            min-width: 60px;
+        .room-code-display {
+            background: rgba(0, 122, 255, 0.15); border: 1px solid var(--primary);
+            padding: 15px; border-radius: 12px; text-align: center;
         }
-        .btn:active { transform: translateY(4px); box-shadow: 0 0px 0 #141824; }
-        .btn:disabled { opacity: 0.35; transform: translateY(3px); box-shadow: 0 1px 0 #141824; pointer-events: none; }
-        .btn-success { background: #2d7a5a; border-color: #3fa07a; color: white; box-shadow: 0 4px 0 #154d37; }
-        .btn-danger { background: #9e3d4a; border-color: #c95666; color: white; box-shadow: 0 4px 0 #632b33; }
-        .btn-warning { background: #b8863a; border-color: #dfa84a; color: #1a1e2c; box-shadow: 0 4px 0 #7a5a24; }
-        .btn-primary { background: #3f4b6b; border-color: #5b6890; color: white; box-shadow: 0 4px 0 #1f263a; }
-        .btn-icon { background: transparent; border: 1px solid #3f4865; border-radius: 60px; padding: 8px 12px; color: #bcc4e0; font-size: 0.9rem; box-shadow: none; min-width: 44px; flex: 0 1 auto; }
-        .btn-icon:active { transform: scale(0.94); }
-
-        .info-line {
-            margin-top: 8px;
-            padding: 6px 12px;
-            background: #11141f;
-            border-radius: 40px;
-            color: #8a94b5;
-            font-size: 0.6rem;
-            text-align: center;
-            border: 1px solid #252b3e;
+        .room-code-display label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+        .room-code-display .code { font-size: 32px; font-weight: 700; color: var(--primary); font-family: monospace; letter-spacing: 4px; }
+        .share-buttons { display: flex; gap: 8px; }
+        .share-btn {
+            flex: 1; padding: 12px; border: none; border-radius: 8px;
+            font-size: 14px; font-weight: 600; cursor: pointer; color: white;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
         }
-        .info-line i { color: #f0b34b; margin-right: 4px; }
-
-        .panel-footer {
-            margin-top: 10px;
-            color: #4a5370;
-            font-size: 0.55rem;
-            text-align: center;
-            letter-spacing: 0.3px;
+        .share-btn.copy { background: var(--primary); }
+        .share-btn.qr { background: var(--warning); }
+        .qr-container { background: white; padding: 15px; border-radius: 12px; display: flex; justify-content: center; }
+        button {
+            padding: 14px 16px; border: none; border-radius: 10px;
+            font-size: 16px; font-weight: 600; cursor: pointer;
+            transition: all 0.2s; color: white;
+            -webkit-tap-highlight-color: transparent; width: 100%;
         }
-        .caller-actions {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-            margin-top: 4px;
+        button:active { transform: scale(0.96); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: var(--primary); }
+        .btn-danger { background: var(--danger); }
+        .btn-success { background: var(--success); }
+        .status { text-align: center; font-size: 13px; color: var(--text-secondary); min-height: 18px; }
+        .hidden { display: none !important; }
+        .walkie-controls { display: flex; flex-direction: column; gap: 12px; }
+        .room-display {
+            background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px;
+            text-align: center; font-size: 14px;
+            display: flex; justify-content: space-between; align-items: center;
         }
-        .caller-actions .btn { flex: 1 1 70px; }
-    </style>
-</head>
-<body>
-
-<div class="app-wrapper">
-
-    <!-- ====== PANEL 1: CALLER ====== -->
-    <div class="panel" id="callerPanel">
-        <div class="panel-header">
-            <h2><i class="fas fa-phone-alt"></i> Caller</h2>
-            <div class="status-badge" id="callerStatus"><i class="fas fa-circle"></i> <span>Offline</span></div>
-        </div>
-
-        <div class="peer-box">
-            <span class="id-display" id="callerIdDisplay">⚡ generating...</span>
-            <button class="btn-sm" id="callerConnectBtn"><i class="fas fa-plug"></i> Go online</button>
-            <button class="btn-sm" id="callerCopyBtn"><i class="far fa-copy"></i></button>
-        </div>
-
-        <div class="video-grid">
-            <div class="video-box">
-                <video id="callerRemoteVideo" autoplay playsinline></video>
-                <span class="label right"><i class="fas fa-user"></i> Remote</span>
-                <div class="placeholder" id="callerRemotePlaceholder"><i class="fas fa-video-slash"></i></div>
-            </div>
-            <div class="video-box">
-                <video id="callerLocalVideo" autoplay playsinline muted></video>
-                <span class="label"><i class="fas fa-user"></i> You</span>
-                <div class="placeholder" id="callerLocalPlaceholder"><i class="fas fa-camera"></i></div>
-            </div>
-        </div>
-
-        <div class="controls">
-            <button class="btn btn-success" id="callerCallBtn" disabled><i class="fas fa-phone-alt"></i> Call</button>
-            <button class="btn btn-danger" id="callerHangupBtn" disabled><i class="fas fa-phone-slash"></i> Hangup</button>
-            <button class="btn btn-warning" id="callerToggleVideo"><i class="fas fa-video"></i> Video</button>
-            <button class="btn btn-icon" id="callerToggleAudio"><i class="fas fa-microphone"></i></button>
-        </div>
-        <div class="caller-actions">
-            <button class="btn btn-primary" id="callerStartLocal"><i class="fas fa-play"></i> Start</button>
-        </div>
-        <div class="info-line" id="callerInfo"><i class="fas fa-info-circle"></i> Enter remote Peer ID to call</div>
-        <div class="panel-footer">PeerJS · click "Go online" to get your ID</div>
-    </div>
-
-    <!-- ====== PANEL 2: RECEIVER ====== -->
-    <div class="panel" id="receiverPanel">
-        <div class="panel-header">
-            <h2><i class="fas fa-headset"></i> Receiver</h2>
-            <div class="status-badge" id="receiverStatus"><i class="fas fa-circle"></i> <span>Offline</span></div>
-        </div>
-
-        <div class="peer-box">
-            <span class="id-display" id="receiverIdDisplay">⚡ generating...</span>
-            <button class="btn-sm" id="receiverConnectBtn"><i class="fas fa-plug"></i> Go online</button>
-            <button class="btn-sm" id="receiverCopyBtn"><i class="far fa-copy"></i></button>
-        </div>
-
-        <div class="video-grid">
-            <div class="video-box">
-                <video id="receiverRemoteVideo" autoplay playsinline></video>
-                <span class="label right"><i class="fas fa-user"></i> Remote</span>
-                <div class="placeholder" id="receiverRemotePlaceholder"><i class="fas fa-video-slash"></i></div>
-            </div>
-            <div class="video-box">
-                <video id="receiverLocalVideo" autoplay playsinline muted></video>
-                <span class="label"><i class="fas fa-user"></i> You</span>
-                <div class="placeholder" id="receiverLocalPlaceholder"><i class="fas fa-camera"></i></div>
-            </div>
-        </div>
-
-        <div class="controls">
-            <button class="btn btn-success" id="receiverCallBtn" disabled><i class="fas fa-phone-alt"></i> Call</button>
-            <button class="btn btn-danger" id="receiverHangupBtn" disabled><i class="fas fa-phone-slash"></i> Hangup</button>
-            <button class="btn btn-warning" id="receiverToggleVideo"><i class="fas fa-video"></i> Video</button>
-            <button class="btn btn-icon" id="receiverToggleAudio"><i class="fas fa-microphone"></i></button>
-        </div>
-        <div class="caller-actions">
-            <button class="btn btn-primary" id="receiverStartLocal"><i class="fas fa-play"></i> Start</button>
-        </div>
-        <div class="info-line" id="receiverInfo"><i class="fas fa-info-circle"></i> Share your ID so others can call you</div>
-        <div class="panel-footer">PeerJS · incoming calls are auto-answered</div>
-    </div>
-</div>
-
-<script>
-    (function() {
-        "use strict";
-
-        // ----- helper to create a panel controller -----
-        function createPanelController(panelId, opts) {
-            const prefix = opts.prefix || 'p';
-            const localVideo = document.getElementById(prefix + 'LocalVideo');
-            const remoteVideo = document.getElementById(prefix + 'RemoteVideo');
-            const localPlaceholder = document.getElementById(prefix + 'LocalPlaceholder');
-            const remotePlaceholder = document.getElementById(prefix + 'RemotePlaceholder');
-            const statusEl = document.getElementById(prefix + 'Status');
-            const infoEl = document.getElementById(prefix + 'Info');
-            const idDisplay = document.getElementById(prefix + 'IdDisplay');
-
-            const connectBtn = document.getElementById(prefix + 'ConnectBtn');
-            const copyBtn = document.getElementById(prefix + 'CopyBtn');
-            const callBtn = document.getElementById(prefix + 'CallBtn');
-            const hangupBtn = document.getElementById(prefix + 'HangupBtn');
-            const toggleVideoBtn = document.getElementById(prefix + 'ToggleVideo');
-            const toggleAudioBtn = document.getElementById(prefix + 'ToggleAudio');
-            const startLocalBtn = document.getElementById(prefix + 'StartLocal');
-
-            // state
-            let localStream = null;
-            let remoteStream = null;
-            let peer = null;
-            let call = null;
-            let isCallActive = false;
-            let isVideoEnabled = true;
-            let isAudioEnabled = true;
-            let myPeerId = '';
-            let remotePeerId = '';
-            let isOnline = false;
-
-            function updateStatus(text, online = true) {
-                const span = statusEl.querySelector('span');
-                if (span) span.innerText = text;
-                statusEl.className = 'status-badge' + (online ? '' : ' off');
-                isOnline = online;
-            }
-
-            function updateInfo(text) {
-                infoEl.innerHTML = '<i class="fas fa-info-circle"></i> ' + text;
-            }
-
-            function setButtons(callActive) {
-                callBtn.disabled = callActive || !peer || !remotePeerId;
-                hangupBtn.disabled = !callActive;
-                if (callActive) {
-                    callBtn.classList.remove('btn-success');
-                    callBtn.classList.add('btn-secondary');
-                } else {
-                    callBtn.classList.remove('btn-secondary');
-                    callBtn.classList.add('btn-success');
-                }
-            }
-
-            function resetCallUI() {
-                if (call) { call.close(); call = null; }
-                if (remoteStream) {
-                    remoteStream.getTracks().forEach(t => t.stop());
-                    remoteStream = null;
-                    remoteVideo.srcObject = null;
-                }
-                remotePlaceholder.style.display = 'flex';
-                remotePlaceholder.innerHTML = '<i class="fas fa-video-slash"></i>';
-                isCallActive = false;
-                setButtons(false);
-                updateStatus(isOnline ? 'Ready' : 'Offline', isOnline);
-                updateInfo(isOnline ? 'Idle' : 'Not connected');
-                remotePeerId = '';
-            }
-
-            function fullReset() {
-                if (call) { call.close(); call = null; }
-                if (peer) { peer.destroy(); peer = null; }
-                if (localStream) {
-                    localStream.getTracks().forEach(t => t.stop());
-                    localStream = null;
-                    localVideo.srcObject = null;
-                }
-                if (remoteStream) {
-                    remoteStream.getTracks().forEach(t => t.stop());
-                    remoteStream = null;
-                    remoteVideo.srcObject = null;
-                }
-                localPlaceholder.style.display = 'flex';
-                localPlaceholder.innerHTML = '<i class="fas fa-camera"></i>';
-                remotePlaceholder.style.display = 'flex';
-                remotePlaceholder.innerHTML = '<i class="fas fa-video-slash"></i>';
-                isCallActive = false;
-                isVideoEnabled = true;
-                isAudioEnabled = true;
-                toggleVideoBtn.innerHTML = '<i class="fas fa-video"></i> Video';
-                toggleAudioBtn.innerHTML = '<i class="fas fa-microphone"></i>';
-                remotePeerId = '';
-                isOnline = false;
-                updateStatus('Offline', false);
-                updateInfo('Click "Go online"');
-                setButtons(false);
-                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Go online';
-                idDisplay.innerText = '⚡ offline';
-            }
-
-            // get local stream
-            async function getLocalStream(videoOn = true, audioOn = true) {
-                try {
-                    const constraints = {
-                        audio: audioOn,
-                        video: videoOn ? { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } : false
-                    };
-                    return await navigator.mediaDevices.getUserMedia(constraints);
-                } catch (err) {
-                    if (videoOn) {
-                        try {
-                            return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                        } catch (e2) {
-                            throw new Error('No media: ' + e2.message);
-                        }
-                    }
-                    throw err;
-                }
-            }
-
-            async function startLocalStream() {
-                try {
-                    if (localStream) {
-                        localStream.getTracks().forEach(t => t.stop());
-                        localStream = null;
-                    }
-                    localStream = await getLocalStream(isVideoEnabled, isAudioEnabled);
-                    localVideo.srcObject = localStream;
-                    localPlaceholder.style.display = 'none';
-                    const hasVideo = localStream.getVideoTracks().length > 0;
-                    if (!hasVideo) {
-                        localPlaceholder.style.display = 'flex';
-                        localPlaceholder.innerHTML = '<i class="fas fa-microphone-slash"></i>';
-                    } else {
-                        localPlaceholder.style.display = 'none';
-                    }
-                    updateStatus(isOnline ? 'Ready' : 'Local ready', isOnline);
-                    return localStream;
-                } catch (err) {
-                    alert('Camera/mic error: ' + err.message);
-                    return null;
-                }
-            }
-
-            // connect peer
-            function connectPeer() {
-                if (peer) {
-                    peer.destroy();
-                    peer = null;
-                }
-                const id = opts.generateId ? opts.generateId() : 'wt-' + Math.floor(Math.random() * 100000);
-                myPeerId = id;
-                idDisplay.innerText = id;
-
-                peer = new Peer(id, {
-                    debug: 0,
-                    config: {
-                        iceServers: [
-                            { urls: 'stun:stun.l.google.com:19302' },
-                            { urls: 'stun:stun1.l.google.com:19302' },
-                            { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-                            { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
-                        ]
-                    }
-                });
-
-                peer.on('open', (id) => {
-                    myPeerId = id;
-                    idDisplay.innerText = id;
-                    isOnline = true;
-                    updateStatus('Ready', true);
-                    updateInfo('Online · ID: ' + id);
-                    connectBtn.innerHTML = '<i class="fas fa-check"></i> Online';
-                    setButtons(false);
-                    if (!localStream) startLocalStream();
-                });
-
-                peer.on('error', (err) => {
-                    console.error('Peer error:', err);
-                    if (err.type === 'unavailable-id') {
-                        alert('ID "' + id + '" is taken. Try a different one.');
-                        fullReset();
-                        connectBtn.innerHTML = '<i class="fas fa-plug"></i> Go online';
-                    } else {
-                        updateStatus('Error', false);
-                    }
-                });
-
-                peer.on('disconnected', () => {
-                    updateStatus('Disconnected', false);
-                    updateInfo('Disconnected');
-                    connectBtn.innerHTML = '<i class="fas fa-plug"></i> Go online';
-                    fullReset();
-                });
-
-                // auto-answer incoming calls
-                peer.on('call', (incomingCall) => {
-                    if (isCallActive) { incomingCall.answer(); return; }
-                    if (!localStream) {
-                        alert('No local stream. Start local first.');
-                        return;
-                    }
-                    call = incomingCall;
-                    call.answer(localStream);
-                    setupCallListeners(call);
-                    remotePeerId = incomingCall.peer;
-                    isCallActive = true;
-                    setButtons(true);
-                    updateStatus('Connected', true);
-                    updateInfo('📞 Call from ' + remotePeerId);
-                    remotePlaceholder.style.display = 'flex';
-                    remotePlaceholder.innerHTML = '<i class="fas fa-spinner fa-pulse"></i>';
-                });
-            }
-
-            function setupCallListeners(mediaCall) {
-                mediaCall.on('stream', (remoteStreamObj) => {
-                    if (!remoteStream) {
-                        remoteStream = new MediaStream();
-                        remoteVideo.srcObject = remoteStream;
-                    }
-                    remoteStreamObj.getTracks().forEach(t => {
-                        if (!remoteStream.getTracks().find(rt => rt.id === t.id)) {
-                            remoteStream.addTrack(t);
-                        }
-                    });
-                    remotePlaceholder.style.display = 'none';
-                    updateStatus('Connected', true);
-                    updateInfo('🔗 Active with ' + remotePeerId);
-                });
-                mediaCall.on('close', () => { hangUp(); });
-                mediaCall.on('error', () => { hangUp(); });
-            }
-
-            function makeCall() {
-                if (!peer) { alert('Connect first'); return; }
-                if (!localStream) { alert('Start local stream'); return; }
-                const target = prompt('Enter remote Peer ID to call:');
-                if (!target) return;
-                remotePeerId = target.trim();
-                if (!remotePeerId) return;
-                const mediaCall = peer.call(remotePeerId, localStream);
-                call = mediaCall;
-                setupCallListeners(mediaCall);
-                isCallActive = true;
-                setButtons(true);
-                updateStatus('Calling...', true);
-                updateInfo('⏳ Calling ' + remotePeerId);
-                remotePlaceholder.style.display = 'flex';
-                remotePlaceholder.innerHTML = '<i class="fas fa-spinner fa-pulse"></i>';
-            }
-
-            function hangUp() {
-                if (call) { call.close(); call = null; }
-                if (remoteStream) {
-                    remoteStream.getTracks().forEach(t => t.stop());
-                    remoteStream = null;
-                    remoteVideo.srcObject = null;
-                }
-                remotePlaceholder.style.display = 'flex';
-                remotePlaceholder.innerHTML = '<i class="fas fa-video-slash"></i>';
-                isCallActive = false;
-                setButtons(false);
-                updateStatus(isOnline ? 'Ready' : 'Offline', isOnline);
-                updateInfo(isOnline ? 'Idle' : 'Not connected');
-                remotePeerId = '';
-            }
-
-            function toggleVideo() {
-                if (!localStream) { alert('Start local first'); return; }
-                const vt = localStream.getVideoTracks();
-                if (vt.length === 0) { alert('No video track'); return; }
-                isVideoEnabled = !isVideoEnabled;
-                vt.forEach(t => t.enabled = isVideoEnabled);
-                toggleVideoBtn.innerHTML = isVideoEnabled ? '<i class="fas fa-video"></i> Video' : '<i class="fas fa-video-slash"></i> Video';
-                localPlaceholder.style.display = isVideoEnabled ? 'none' : 'flex';
-                if (!isVideoEnabled) localPlaceholder.innerHTML = '<i class="fas fa-camera"></i>';
-                else localPlaceholder.style.display = 'none';
-            }
-
-            function toggleAudio() {
-                if (!localStream) { alert('Start local first'); return; }
-                const at = localStream.getAudioTracks();
-                if (at.length === 0) return;
-                isAudioEnabled = !isAudioEnabled;
-                at.forEach(t => t.enabled = isAudioEnabled);
-                toggleAudioBtn.innerHTML = isAudioEnabled ? '<i class="fas fa-microphone"></i>' : '<i class="fas fa-microphone-slash"></i>';
-            }
-
-            function copyId() {
-                const id = idDisplay.innerText;
-                if (!id || id.includes('⚡')) return;
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(id).then(() => alert('Copied: ' + id)).catch(() => fallbackCopy(id));
-                } else { fallbackCopy(id); }
-            }
-            function fallbackCopy(text) {
-                const ta = document.createElement('textarea');
-                ta.value = text;
-                document.body.appendChild(ta);
-                ta.select();
-                document.execCommand('copy');
-                document.body.removeChild(ta);
-                alert('Copied: ' + text);
-            }
-
-            // ----- bind events -----
-            connectBtn.addEventListener('click', connectPeer);
-            copyBtn.addEventListener('click', copyId);
-            callBtn.addEventListener('click', makeCall);
-            hangupBtn.addEventListener('click', hangUp);
-            toggleVideoBtn.addEventListener('click', toggleVideo);
-            toggleAudioBtn.addEventListener('click', toggleAudio);
-            startLocalBtn.addEventListener('click', startLocalStream);
-
-            // expose reset
-            return { fullReset, connectPeer, startLocalStream, hangUp };
-        }
-
-        // ----- create two panels with unique ID generators -----
-        const caller = createPanelController('caller', {
-            prefix: 'caller',
-            generateId: () => 'caller-' + Math.floor(Math.random() * 100000)
-        });
-
-        const receiver = createPanelController('receiver', {
-            prefix: 'receiver',
-            generateId: () => 'receiver-' + Math.floor(Math.random() * 100000)
-        });
-
-        // auto-connect both on load
-        window.addEventListener('load', () => {
-            setTimeout(() => {
-                caller.connectPeer();
-                receiver.connectPeer();
-            }, 500);
-        });
-
-        // expose for debugging
-        window.__resetAll = () => {
-            caller.fullReset();
-            receiver.fullReset();
-        };
-    })();
-</script>
-</body>
-</html>
+        .room-display strong { color: var(--
