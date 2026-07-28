@@ -64,7 +64,6 @@
         .status-badge i { color: #4caf84; font-size: 0.55rem; }
         .status-badge.off i { color: #e74c5e; }
 
-        /* Peer ID row */
         .peer-row {
             background: #11141f;
             border-radius: 60px;
@@ -104,7 +103,6 @@
         .peer-row .btn-sm:active { transform: translateY(3px); box-shadow: 0 0px 0 #1f263a; }
         .peer-row .btn-sm:disabled { opacity: 0.4; transform: translateY(2px); box-shadow: 0 1px 0 #1f263a; pointer-events: none; }
 
-        /* Mode toggle */
         .mode-toggle {
             display: flex;
             background: #11141f;
@@ -137,7 +135,6 @@
         }
         .mode-toggle .mode-btn:active { transform: scale(0.96); }
 
-        /* Remote ID input (caller mode) */
         .remote-input-area {
             display: none;
             background: #11141f;
@@ -279,15 +276,7 @@
             text-align: center;
             letter-spacing: 0.3px;
         }
-        .action-row {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-            margin-top: 4px;
-        }
-        .action-row .btn { flex: 1 1 70px; }
 
-        /* receiver waiting animation */
         .waiting-pulse {
             animation: pulse 1.5s ease-in-out infinite;
         }
@@ -345,9 +334,6 @@
         <button class="btn btn-warning" id="toggleVideoBtn"><i class="fas fa-video"></i> Video</button>
         <button class="btn btn-icon" id="toggleAudioBtn"><i class="fas fa-microphone"></i></button>
     </div>
-    <div class="action-row">
-        <button class="btn btn-primary" id="startLocalBtn"><i class="fas fa-play"></i> Start local</button>
-    </div>
 
     <!-- Info -->
     <div class="info-line" id="infoLine"><i class="fas fa-info-circle"></i> Click "Go online" to get your Peer ID</div>
@@ -374,7 +360,6 @@
         const hangupBtn = document.getElementById('hangupBtn');
         const toggleVideoBtn = document.getElementById('toggleVideoBtn');
         const toggleAudioBtn = document.getElementById('toggleAudioBtn');
-        const startLocalBtn = document.getElementById('startLocalBtn');
         const remoteIdInput = document.getElementById('remoteIdInput');
         const remoteInputArea = document.getElementById('remoteInputArea');
         const modeBtns = document.querySelectorAll('.mode-btn');
@@ -390,7 +375,7 @@
         let myPeerId = '';
         let remotePeerId = '';
         let isOnline = false;
-        let currentMode = 'caller'; // 'caller' or 'receiver'
+        let currentMode = 'caller';
 
         // ----- Helpers -----
         function updateStatus(text, online = true) {
@@ -540,7 +525,7 @@
                 updateStatus('Ready', true);
                 updateInfo(currentMode === 'caller' ? 'Enter ID and call' : 'Waiting for incoming call...');
                 connectBtn.innerHTML = '<i class="fas fa-check"></i> Online';
-                if (!localStream) startLocalStream();
+                startLocalStream(); // auto-start camera/mic
                 callBtn.disabled = (currentMode === 'receiver');
                 if (currentMode === 'receiver') {
                     remotePlaceholder.innerHTML = '<i class="fas fa-headset waiting-pulse"></i>';
@@ -553,7 +538,7 @@
                 console.error('Peer error:', err);
                 if (err.type === 'unavailable-id') {
                     alert('ID "' + id + '" is taken. Retrying...');
-                    connectPeer(); // auto-retry with new ID
+                    connectPeer();
                 } else {
                     updateStatus('Error', false);
                     updateInfo('Error: ' + err.type);
@@ -567,14 +552,28 @@
                 fullReset();
             });
 
-            // ----- Auto-answer incoming calls (Receiver mode) -----
+            // ----- Auto-answer incoming calls -----
             peer.on('call', (incomingCall) => {
                 if (isCallActive) { incomingCall.answer(); return; }
                 if (!localStream) {
-                    alert('No local stream. Start local first.');
+                    // try to start stream if not available
+                    startLocalStream().then(() => {
+                        if (localStream) {
+                            call = incomingCall;
+                            call.answer(localStream);
+                            setupCallListeners(call);
+                            remotePeerId = incomingCall.peer;
+                            isCallActive = true;
+                            setButtons(true);
+                            updateStatus('Connected', true);
+                            updateInfo('📞 Call from ' + remotePeerId);
+                            remotePlaceholder.style.display = 'flex';
+                            remotePlaceholder.innerHTML = '<i class="fas fa-spinner fa-pulse"></i>';
+                            remotePlaceholder.style.fontSize = '2.6rem';
+                        }
+                    });
                     return;
                 }
-                // If in caller mode, we still answer but treat as incoming
                 call = incomingCall;
                 call.answer(localStream);
                 setupCallListeners(call);
@@ -613,7 +612,10 @@
         // ----- Make outgoing call -----
         function makeCall() {
             if (!peer) { alert('Connect first'); return; }
-            if (!localStream) { alert('Start local stream'); return; }
+            if (!localStream) { 
+                await startLocalStream();
+                if (!localStream) return;
+            }
             const target = remoteIdInput.value.trim();
             if (!target) { alert('Enter remote Peer ID'); return; }
             remotePeerId = target;
@@ -654,9 +656,9 @@
 
         // ----- Toggle video / audio -----
         function toggleVideo() {
-            if (!localStream) { alert('Start local first'); return; }
+            if (!localStream) { return; }
             const vt = localStream.getVideoTracks();
-            if (vt.length === 0) { alert('No video track'); return; }
+            if (vt.length === 0) { return; }
             isVideoEnabled = !isVideoEnabled;
             vt.forEach(t => t.enabled = isVideoEnabled);
             toggleVideoBtn.innerHTML = isVideoEnabled ? '<i class="fas fa-video"></i> Video' : '<i class="fas fa-video-slash"></i> Video';
@@ -666,7 +668,7 @@
         }
 
         function toggleAudio() {
-            if (!localStream) { alert('Start local first'); return; }
+            if (!localStream) { return; }
             const at = localStream.getAudioTracks();
             if (at.length === 0) return;
             isAudioEnabled = !isAudioEnabled;
@@ -730,7 +732,6 @@
         hangupBtn.addEventListener('click', hangUp);
         toggleVideoBtn.addEventListener('click', toggleVideo);
         toggleAudioBtn.addEventListener('click', toggleAudio);
-        startLocalBtn.addEventListener('click', startLocalStream);
 
         modeBtns.forEach(btn => {
             btn.addEventListener('click', () => {
@@ -738,7 +739,6 @@
             });
         });
 
-        // Enter key on remote ID input
         remoteIdInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') makeCall();
         });
