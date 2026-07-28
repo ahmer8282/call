@@ -295,7 +295,6 @@
             </button>
 
             <div class="action-row">
-                <button class="btn-primary" id="callBtn" disabled>📞 Call</button>
                 <button class="btn-success" id="camBtn" disabled>📹 Camera</button>
                 <button class="btn-danger" id="hangupBtn">📞 Leave</button>
             </div>
@@ -318,7 +317,6 @@
         const pttText = document.getElementById('pttText');
         const camBtn = document.getElementById('camBtn');
         const hangupBtn = document.getElementById('hangupBtn');
-        const callBtn = document.getElementById('callBtn');
         const copyLinkBtn = document.getElementById('copyLinkBtn');
         const showQrBtn = document.getElementById('showQrBtn');
         const qrContainer = document.getElementById('qrContainer');
@@ -331,6 +329,7 @@
         let myUserId;
         let otherUserId;
         let qrCode = null;
+        let registrationAttempt = 1;
 
         function generateRoomCode() {
             const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -352,15 +351,6 @@
             setTimeout(() => toast.classList.remove('show'), 2000);
         }
 
-        function generateUserId(room) {
-            const hash = room.split('').reduce((a, b) => {
-                a = ((a << 5) - a) + b.charCodeAt(0);
-                return a & a;
-            }, 0);
-            const userNum = Math.abs(hash) % 2 === 0 ? 1 : 2;
-            return `${room}-user${userNum}`;
-        }
-
         function initRoom() {
             myRoom = getRoomFromUrl() || generateRoomCode();
             roomCodeDisplay.textContent = myRoom;
@@ -369,9 +359,6 @@
                 const newUrl = `${window.location.origin}${window.location.pathname}?room=${myRoom}`;
                 window.history.replaceState({}, '', newUrl);
             }
-
-            myUserId = generateUserId(myRoom);
-            otherUserId = myUserId.endsWith('user1') ? `${myRoom}-user2` : `${myRoom}-user1`;
         }
 
         copyLinkBtn.addEventListener('click', async () => {
@@ -422,7 +409,6 @@
             joinBtn.textContent = '⏳ Starting camera...';
 
             try {
-                // Get media with explicit constraints
                 localStream = await navigator.mediaDevices.getUserMedia({ 
                     video: { 
                         facingMode: 'user',
@@ -435,26 +421,9 @@
                     }
                 });
                 
-                console.log('Local stream tracks:', localStream.getTracks());
-                
-                // Verify video track is active
-                const videoTrack = localStream.getVideoTracks()[0];
-                if (videoTrack) {
-                    console.log('Video track settings:', videoTrack.getSettings());
-                    console.log('Video track enabled:', videoTrack.enabled);
-                }
-                
                 localVideo.srcObject = localStream;
+                await localVideo.play();
                 
-                // Explicitly play the video
-                try {
-                    await localVideo.play();
-                    console.log('Local video playing');
-                } catch (playErr) {
-                    console.error('Local video play error:', playErr);
-                }
-                
-                // Start with audio muted
                 localStream.getAudioTracks()[0].enabled = false;
                 
                 camBtn.disabled = false;
@@ -473,39 +442,66 @@
         });
 
         function initPeer() {
-            // Use explicit ICE servers for better connectivity
+            // Try to register as user1 first
+            myUserId = `${myRoom}-user${registrationAttempt}`;
+            otherUserId = `${myRoom}-user${registrationAttempt === 1 ? 2 : 1}`;
+            
+            console.log(`Attempting to register as: ${myUserId}`);
+            
             peer = new Peer(myUserId, {
                 config: {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' },
-                        { urls: 'stun:stun3.l.google.com:19302' },
-                        { urls: 'stun:stun4.l.google.com:19302' }
+                        { urls: 'stun:stun1.l.google.com:19302' }
                     ]
                 }
             });
 
             peer.on('open', id => {
-                console.log('PeerJS connected:', id);
-                statusCall.textContent = `Ready. Waiting for other person...`;
-                callBtn.disabled = false;
+                console.log('Successfully registered as:', id);
+                statusCall.textContent = `Connected as ${registrationAttempt === 1 ? 'Host' : 'Guest'}. Waiting...`;
+                
+                // If I'm user2 (guest), call user1 (host) immediately
+                if (registrationAttempt === 2) {
+                    setTimeout(() => {
+                        if (!currentCall) {
+                            console.log('User2 calling user1...');
+                            statusCall.textContent = 'Connecting to host...';
+                            const call = peer.call(otherUserId, localStream);
+                            handleCall(call);
+                        }
+                    }, 1000);
+                }
             });
 
             peer.on('call', call => {
                 console.log('Incoming call from:', call.peer);
                 statusCall.textContent = 'Incoming call...';
-                
                 call.answer(localStream);
                 handleCall(call);
             });
 
             peer.on('error', err => {
                 console.error('PeerJS error:', err);
-                if (err.type === 'peer-unavailable') {
-                    statusCall.textContent = `Other person not in room yet. Tap "Call" when they join.`;
-                } else if (err.type === 'unavailable-id') {
-                    statusCall.textContent = 'Room is full. Try a different room.';
+                
+                if (err.type === 'unavailable-id' && registrationAttempt === 1) {
+                    // user1 is taken, so I must be user2
+                    console.log('user1 taken, switching to user2');
+                    registrationAttempt = 2;
+                    peer.destroy();
+                    
+                    // Retry registration as user2
+                    setTimeout(() => {
+                        initPeer();
+                    }, 500);
+                } else if (err.type === 'peer-unavailable') {
+                    statusCall.textContent = 'Waiting for other person to join...';
+                } else if (err.type === 'network' || err.type === 'server-error') {
+                    statusCall.textContent = 'Network error. Retrying...';
+                    setTimeout(() => {
+                        peer.destroy();
+                        initPeer();
+                    }, 3000);
                 } else {
                     statusCall.textContent = 'Error: ' + err.type;
                 }
@@ -514,16 +510,12 @@
 
         function handleCall(call) {
             currentCall = call;
-            callBtn.disabled = true;
             statusCall.textContent = 'Connected!';
 
             call.on('stream', remoteStream => {
-                console.log('Received remote stream:', remoteStream);
-                console.log('Remote tracks:', remoteStream.getTracks());
-                
+                console.log('Received remote stream');
                 remoteVideo.srcObject = remoteStream;
                 
-                // Explicitly play remote video
                 remoteVideo.play().then(() => {
                     console.log('Remote video playing');
                 }).catch(err => {
@@ -538,24 +530,10 @@
             
             call.on('error', err => {
                 console.error('Call error:', err);
-                statusCall.textContent = 'Call error. Tap "Call" to reconnect.';
+                statusCall.textContent = 'Call error. Waiting to reconnect...';
                 currentCall = null;
-                callBtn.disabled = false;
             });
         }
-
-        callBtn.addEventListener('click', () => {
-            if (!peer || !localStream) return;
-            
-            console.log('Initiating call to:', otherUserId);
-            console.log('Sending stream:', localStream);
-            
-            statusCall.textContent = 'Calling...';
-            callBtn.disabled = true;
-            
-            const call = peer.call(otherUserId, localStream);
-            handleCall(call);
-        });
 
         pttBtn.addEventListener('click', () => {
             if (!localStream) return;
@@ -596,8 +574,7 @@
                 currentCall = null;
             }
             remoteVideo.srcObject = null;
-            statusCall.textContent = 'Disconnected. Tap "Call" to reconnect.';
-            callBtn.disabled = false;
+            statusCall.textContent = 'Disconnected. Waiting to reconnect...';
         }
 
         initRoom();
