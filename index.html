@@ -63,6 +63,7 @@
         }
         .status-badge i { color: #4caf84; font-size: 0.55rem; }
         .status-badge.off i { color: #e74c5e; }
+        .status-badge.error i { color: #e74c5e; }
 
         .peer-row {
             background: #11141f;
@@ -291,6 +292,8 @@
             border: 1px solid #252b3e;
         }
         .info-line i { color: #f0b34b; margin-right: 4px; }
+        .info-line.error { color: #e74c5e; border-color: #e74c5e; }
+        .info-line.success { color: #4caf84; border-color: #4caf84; }
 
         .footer {
             margin-top: 10px;
@@ -476,13 +479,13 @@
         }
 
         // ----- Helpers -----
-        function updateStatus(text, online = true) {
+        function updateStatus(text, online = true, isError = false) {
             statusText.innerText = text;
-            statusBadge.className = 'status-badge' + (online ? '' : ' off');
-            isOnline = online;
+            statusBadge.className = 'status-badge' + (online ? '' : ' off') + (isError ? ' error' : '');
         }
 
-        function updateInfo(text) {
+        function updateInfo(text, type = '') {
+            infoLine.className = 'info-line ' + type;
             infoLine.innerHTML = '<i class="fas fa-info-circle"></i> ' + text;
         }
 
@@ -553,7 +556,7 @@
             callBtn.disabled = true;
         }
 
-        // ----- Get local stream -----
+        // ----- Get local stream with better error handling -----
         async function getLocalStream(videoOn = true, audioOn = true) {
             try {
                 const constraints = {
@@ -564,13 +567,23 @@
                         height: { ideal: 480 } 
                     } : false
                 };
-                return await navigator.mediaDevices.getUserMedia(constraints);
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                // Verify stream has tracks
+                if (stream.getTracks().length === 0) {
+                    throw new Error('No media tracks available');
+                }
+                return stream;
             } catch (err) {
+                console.error('getUserMedia error:', err);
                 if (videoOn) {
                     try {
-                        return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                        const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                        if (audioOnly.getTracks().length > 0) {
+                            updateInfo('Audio only (no camera)', 'error');
+                            return audioOnly;
+                        }
                     } catch (e2) {
-                        throw new Error('No media: ' + e2.message);
+                        throw new Error('No audio or video: ' + e2.message);
                     }
                 }
                 throw err;
@@ -586,22 +599,31 @@
                 localStream = await getLocalStream(isVideoEnabled, isAudioEnabled);
                 localVideo.srcObject = localStream;
                 localPlaceholder.style.display = 'none';
+                
                 const hasVideo = localStream.getVideoTracks().length > 0;
+                const hasAudio = localStream.getAudioTracks().length > 0;
+                
                 if (!hasVideo) {
                     localPlaceholder.style.display = 'flex';
                     localPlaceholder.innerHTML = '<i class="fas fa-microphone-slash"></i>';
+                    updateInfo('Audio only - no camera access', 'error');
+                } else if (!hasAudio) {
+                    updateInfo('Video only - no microphone', 'error');
                 } else {
-                    localPlaceholder.style.display = 'none';
+                    updateInfo(isOnline ? 'Ready' : 'Local ready', 'success');
                 }
+                
                 updateStatus(isOnline ? 'Ready' : 'Local ready', isOnline);
                 return localStream;
             } catch (err) {
-                alert('Camera/mic error: ' + err.message);
+                console.error('Start stream error:', err);
+                updateInfo('❌ Camera/mic error: ' + err.message, 'error');
+                alert('Camera/mic error: ' + err.message + '\n\nPlease allow camera and microphone permissions in your browser settings.');
                 return null;
             }
         }
 
-        // ----- Connect Peer (SIMPLE VERSION - no complex STUN/TURN) -----
+        // ----- Connect Peer -----
         function connectPeer() {
             if (peer) {
                 peer.destroy();
@@ -619,11 +641,8 @@
             updateStatus('Connecting...', true);
             updateInfo('Connecting to PeerJS...');
 
-            // SUPER SIMPLE: Let PeerJS handle everything automatically
-            // No STUN/TURN configuration needed - PeerJS cloud does it all
             peer = new Peer(id, {
                 debug: 2
-                // No config.iceServers - PeerJS uses its own cloud TURN servers
             });
 
             peer.on('open', (id) => {
@@ -632,11 +651,15 @@
                 storeId(id);
                 isOnline = true;
                 updateStatus('✅ Ready', true);
-                updateInfo(currentMode === 'caller' ? 'Enter ID and call' : 'Waiting for incoming call...');
+                updateInfo(currentMode === 'caller' ? 'Enter ID and call' : 'Waiting for incoming call...', 'success');
                 connectBtn.innerHTML = '<i class="fas fa-check"></i> Online';
+                
+                // Auto-start local stream
                 startLocalStream();
+                
                 callBtn.disabled = (currentMode === 'receiver');
                 cameraSwitchBtn.disabled = false;
+                
                 if (currentMode === 'receiver') {
                     remotePlaceholder.innerHTML = '<i class="fas fa-headset waiting-pulse"></i>';
                     remotePlaceholder.style.fontSize = '3rem';
@@ -650,7 +673,7 @@
                     const newId = generateId();
                     storeId(newId);
                     myIdDisplay.innerText = newId;
-                    updateInfo('ID taken, using: ' + newId);
+                    updateInfo('ID taken, using: ' + newId, 'error');
                     if (peer) {
                         peer.destroy();
                         peer = null;
@@ -659,19 +682,19 @@
                         connectPeer();
                     }, 500);
                 } else if (err.type === 'network') {
-                    updateStatus('Network error', false);
-                    updateInfo('Check internet connection');
+                    updateStatus('Network error', false, true);
+                    updateInfo('❌ Check internet connection', 'error');
                     connectBtn.innerHTML = '<i class="fas fa-plug"></i> Retry';
                 } else {
-                    updateStatus('Error', false);
-                    updateInfo('Error: ' + err.type);
+                    updateStatus('Error', false, true);
+                    updateInfo('❌ Error: ' + err.type, 'error');
                     connectBtn.innerHTML = '<i class="fas fa-plug"></i> Retry';
                 }
             });
 
             peer.on('disconnected', () => {
-                updateStatus('Disconnected', false);
-                updateInfo('Reconnecting...');
+                updateStatus('Disconnected', false, true);
+                updateInfo('Reconnecting...', 'error');
                 connectBtn.innerHTML = '<i class="fas fa-plug"></i> Reconnect';
                 setTimeout(() => {
                     if (peer && !peer.open) {
@@ -705,7 +728,7 @@
                                 isCallActive = true;
                                 setButtons(true);
                                 updateStatus('Connected', true);
-                                updateInfo('📞 Call from ' + remotePeerId);
+                                updateInfo('📞 Call from ' + remotePeerId, 'success');
                                 remotePlaceholder.style.display = 'flex';
                                 remotePlaceholder.innerHTML = '<i class="fas fa-spinner fa-pulse"></i>';
                                 remotePlaceholder.style.fontSize = '2.6rem';
@@ -720,7 +743,7 @@
                     isCallActive = true;
                     setButtons(true);
                     updateStatus('Connected', true);
-                    updateInfo('📞 Call from ' + remotePeerId);
+                    updateInfo('📞 Call from ' + remotePeerId, 'success');
                     remotePlaceholder.style.display = 'flex';
                     remotePlaceholder.innerHTML = '<i class="fas fa-spinner fa-pulse"></i>';
                     remotePlaceholder.style.fontSize = '2.6rem';
@@ -732,6 +755,7 @@
         // ----- Setup call listeners -----
         function setupCallListeners(mediaCall) {
             mediaCall.on('stream', (remoteStreamObj) => {
+                console.log('✅ Remote stream received:', remoteStreamObj);
                 if (!remoteStream) {
                     remoteStream = new MediaStream();
                     remoteVideo.srcObject = remoteStream;
@@ -739,19 +763,22 @@
                 remoteStreamObj.getTracks().forEach(t => {
                     if (!remoteStream.getTracks().find(rt => rt.id === t.id)) {
                         remoteStream.addTrack(t);
+                        console.log('✅ Added track:', t.kind);
                     }
                 });
                 remotePlaceholder.style.display = 'none';
                 updateStatus('Connected', true);
-                updateInfo('🔗 Active with ' + remotePeerId);
+                updateInfo('🔗 Active with ' + remotePeerId, 'success');
             });
             
             mediaCall.on('close', () => { 
+                console.log('Call closed');
                 hangUp(); 
             });
             
             mediaCall.on('error', (err) => {
                 console.error('Call error:', err);
+                updateInfo('❌ Call error: ' + err.message, 'error');
                 hangUp();
             });
         }
@@ -768,7 +795,10 @@
             }
             if (!localStream) {
                 await startLocalStream();
-                if (!localStream) return;
+                if (!localStream) {
+                    alert('No local stream available. Please allow camera/mic permissions.');
+                    return;
+                }
             }
             const target = remoteIdInput.value.trim();
             if (!target) { 
@@ -776,6 +806,9 @@
                 return; 
             }
             remotePeerId = target;
+            
+            console.log('📞 Calling:', remotePeerId);
+            console.log('Local stream tracks:', localStream.getTracks().map(t => t.kind));
             
             const mediaCall = peer.call(remotePeerId, localStream);
             call = mediaCall;
@@ -814,24 +847,38 @@
 
         // ----- Toggle video / audio -----
         function toggleVideo() {
-            if (!localStream) { return; }
+            if (!localStream) { 
+                updateInfo('Start local stream first', 'error');
+                return; 
+            }
             const vt = localStream.getVideoTracks();
-            if (vt.length === 0) { return; }
+            if (vt.length === 0) { 
+                updateInfo('No video track', 'error');
+                return; 
+            }
             isVideoEnabled = !isVideoEnabled;
             vt.forEach(t => t.enabled = isVideoEnabled);
             toggleVideoBtn.innerHTML = isVideoEnabled ? '<i class="fas fa-video"></i> Video' : '<i class="fas fa-video-slash"></i> Video';
             localPlaceholder.style.display = isVideoEnabled ? 'none' : 'flex';
             if (!isVideoEnabled) localPlaceholder.innerHTML = '<i class="fas fa-camera"></i>';
             else localPlaceholder.style.display = 'none';
+            updateInfo(isVideoEnabled ? '📷 Video on' : '📷 Video off');
         }
 
         function toggleAudio() {
-            if (!localStream) { return; }
+            if (!localStream) { 
+                updateInfo('Start local stream first', 'error');
+                return; 
+            }
             const at = localStream.getAudioTracks();
-            if (at.length === 0) return;
+            if (at.length === 0) {
+                updateInfo('No audio track', 'error');
+                return;
+            }
             isAudioEnabled = !isAudioEnabled;
             at.forEach(t => t.enabled = isAudioEnabled);
             toggleAudioBtn.innerHTML = isAudioEnabled ? '<i class="fas fa-microphone"></i>' : '<i class="fas fa-microphone-slash"></i>';
+            updateInfo(isAudioEnabled ? '🎤 Mic on' : '🎤 Mic off');
         }
 
         // ----- Copy ID -----
