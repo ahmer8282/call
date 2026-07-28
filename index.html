@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Direct Walkie-Talkie</title>
-    <!-- PeerJS for direct Peer-to-Peer connection -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-    <!-- QR Code Generator -->
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         :root {
@@ -39,7 +37,6 @@
             height: 100dvh;
         }
 
-        /* Video Container */
         .video-container {
             flex: 1;
             position: relative;
@@ -70,11 +67,10 @@
             border: 2px solid rgba(255,255,255,0.3);
             z-index: 2;
             object-fit: cover;
-            transform: scaleX(-1); /* Mirror effect */
+            transform: scaleX(-1);
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
 
-        /* Custom UI Overlay */
         .controls {
             background: var(--card-bg);
             backdrop-filter: blur(10px);
@@ -270,13 +266,11 @@
 </head>
 <body>
 
-    <!-- Video Area -->
     <div class="video-container">
         <video id="remoteVideo" autoplay playsinline muted></video>
         <video id="localVideo" autoplay playsinline muted></video>
     </div>
 
-    <!-- SETUP SCREEN -->
     <div class="controls" id="setupScreen">
         <div class="status">Your Direct Room Code:</div>
         
@@ -297,7 +291,6 @@
         <button class="btn-success" id="joinBtn">📹 Join Room</button>
     </div>
 
-    <!-- CALL SCREEN -->
     <div class="controls hidden" id="callScreen">
         <div class="walkie-controls">
             <div class="room-display">
@@ -307,9 +300,9 @@
             
             <div class="status" id="statusCall">Initializing connection...</div>
 
-            <button class="ptt-button muted" id="pttBtn">
-                <span id="pttIcon">🔇</span>
-                <span id="pttText">TAP TO TALK</span>
+            <button class="ptt-button unmuted" id="pttBtn">
+                <span id="pttIcon">🎤</span>
+                <span id="pttText">TAP TO MUTE</span>
             </button>
 
             <div class="action-row">
@@ -413,18 +406,37 @@
             joinBtn.textContent = '⏳ Starting camera...';
 
             try {
-                // Request media AFTER user gesture (required for iOS)
+                // Request media with explicit audio constraints
                 localStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, 
-                    audio: { echoCancellation: true, noiseSuppression: true }
+                    video: { 
+                        facingMode: 'user', 
+                        width: { ideal: 640 }, 
+                        height: { ideal: 480 } 
+                    }, 
+                    audio: { 
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
                 });
                 
-                localVideo.srcObject = localStream;
-                await localVideo.play(); // Explicit play for iOS
+                console.log('Local stream tracks:', localStream.getTracks());
                 
-                // Start muted (Walkie-Talkie style)
-                localStream.getAudioTracks()[0].enabled = false;
-                updatePTTButton(true);
+                // Verify audio track exists and is active
+                const audioTrack = localStream.getAudioTracks()[0];
+                if (audioTrack) {
+                    console.log('Audio track:', audioTrack.label);
+                    console.log('Audio enabled:', audioTrack.enabled);
+                    audioTrack.enabled = true; // Ensure audio is ON
+                } else {
+                    console.warn('No audio track found!');
+                }
+                
+                localVideo.srcObject = localStream;
+                await localVideo.play();
+                
+                // Start UNMUTED (audio enabled)
+                updatePTTButton(false);
                 updateCamButton(false);
                 
                 camBtn.disabled = false;
@@ -436,7 +448,7 @@
                 initPeer();
             } catch (err) {
                 console.error('Media error:', err);
-                alert('Camera/Mic access denied. Please allow permissions in Settings and refresh.');
+                alert('Camera/Mic access denied: ' + err.message + '\n\nPlease allow permissions in Settings and refresh.');
                 joinBtn.disabled = false;
                 joinBtn.textContent = '📹 Retry';
             }
@@ -467,7 +479,6 @@
                     statusCall.textContent = 'Waiting for other person to join...';
                 } else {
                     statusCall.textContent = 'Connecting to host...';
-                    // If I'm user2 (guest), call user1 (host) automatically
                     setTimeout(() => {
                         if (!currentCall && peer && !peer.destroyed) {
                             console.log('User2 calling user1...');
@@ -489,7 +500,6 @@
                 console.error('PeerJS error:', err);
                 
                 if (err.type === 'unavailable-id' && registrationAttempt === 1) {
-                    // user1 is taken, so I must be user2
                     console.log('user1 taken, switching to user2');
                     registrationAttempt = 2;
                     peer.destroy();
@@ -514,9 +524,10 @@
 
             call.on('stream', remoteStream => {
                 console.log('Received remote stream');
+                console.log('Remote tracks:', remoteStream.getTracks());
+                
                 remoteVideo.srcObject = remoteStream;
                 
-                // Explicit play for iOS
                 remoteVideo.play().then(() => {
                     console.log('Remote video playing');
                 }).catch(err => {
@@ -563,8 +574,11 @@
         pttBtn.addEventListener('click', () => {
             if (!localStream) return;
             const audioTrack = localStream.getAudioTracks()[0];
-            audioTrack.enabled = !audioTrack.enabled;
-            updatePTTButton(!audioTrack.enabled);
+            if (audioTrack) {
+                audioTrack.enabled = !audioTrack.enabled;
+                console.log('Audio toggled:', audioTrack.enabled);
+                updatePTTButton(!audioTrack.enabled);
+            }
         });
 
         camBtn.addEventListener('click', () => {
@@ -590,7 +604,6 @@
             statusCall.textContent = 'Disconnected. Waiting to reconnect...';
         }
 
-        // Initialize on load
         initRoom();
     </script>
 </body>
