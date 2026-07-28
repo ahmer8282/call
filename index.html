@@ -253,7 +253,6 @@
         .btn:disabled { opacity: 0.35; transform: translateY(3px); box-shadow: 0 1px 0 #141824; pointer-events: none; }
         .btn-danger { background: #9e3d4a; border-color: #c95666; color: white; box-shadow: 0 4px 0 #632b33; }
         .btn-warning { background: #b8863a; border-color: #dfa84a; color: #1a1e2c; box-shadow: 0 4px 0 #7a5a24; }
-        .btn-primary { background: #3f4b6b; border-color: #5b6890; color: white; box-shadow: 0 4px 0 #1f263a; }
         .btn-icon { background: transparent; border: 1px solid #3f4865; border-radius: 60px; padding: 8px 12px; color: #bcc4e0; font-size: 0.9rem; box-shadow: none; min-width: 44px; flex: 0 1 auto; }
         .btn-icon:active { transform: scale(0.94); }
 
@@ -392,7 +391,7 @@
             hangupBtn.disabled = !callActive;
             if (callActive) {
                 callBtn.disabled = true;
-                callBtn.textContent = '📞 Calling...';
+                callBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Calling...';
             } else {
                 callBtn.disabled = !isOnline || currentMode === 'receiver';
                 callBtn.innerHTML = '<i class="fas fa-phone-alt"></i> Call';
@@ -525,7 +524,7 @@
                 updateStatus('Ready', true);
                 updateInfo(currentMode === 'caller' ? 'Enter ID and call' : 'Waiting for incoming call...');
                 connectBtn.innerHTML = '<i class="fas fa-check"></i> Online';
-                startLocalStream(); // auto-start camera/mic
+                startLocalStream();
                 callBtn.disabled = (currentMode === 'receiver');
                 if (currentMode === 'receiver') {
                     remotePlaceholder.innerHTML = '<i class="fas fa-headset waiting-pulse"></i>';
@@ -556,7 +555,6 @@
             peer.on('call', (incomingCall) => {
                 if (isCallActive) { incomingCall.answer(); return; }
                 if (!localStream) {
-                    // try to start stream if not available
                     startLocalStream().then(() => {
                         if (localStream) {
                             call = incomingCall;
@@ -609,10 +607,10 @@
             mediaCall.on('error', () => { hangUp(); });
         }
 
-        // ----- Make outgoing call -----
-        function makeCall() {
+        // ----- Make outgoing call (FIXED: async function) -----
+        async function makeCall() {
             if (!peer) { alert('Connect first'); return; }
-            if (!localStream) { 
+            if (!localStream) {
                 await startLocalStream();
                 if (!localStream) return;
             }
