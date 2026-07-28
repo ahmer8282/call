@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>📡 WalkieTalk · Call or Receive</title>
+    <title>📡 WalkieTalk</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
@@ -87,7 +87,6 @@
             cursor: pointer;
             padding: 4px 8px;
             border-radius: 8px;
-            transition: background 0.2s;
         }
         .peer-row .my-id:hover {
             background: #2a3045;
@@ -280,27 +279,6 @@
             color: #4caf84;
             border-color: #4caf84;
         }
-        .btn-speaker {
-            background: transparent;
-            border: 1px solid #3f4865;
-            border-radius: 60px;
-            padding: 8px 12px;
-            color: #bcc4e0;
-            font-size: 0.9rem;
-            box-shadow: none;
-            min-width: 44px;
-            flex: 0 1 auto;
-            cursor: pointer;
-            transition: 0.15s;
-            touch-action: manipulation;
-        }
-        .btn-speaker:active { transform: scale(0.94); }
-        .btn-speaker.active {
-            background: #2f3a57;
-            color: #4caf84;
-            border-color: #4caf84;
-        }
-        .btn-speaker:disabled { opacity: 0.35; pointer-events: none; }
 
         .info-line {
             margin-top: 10px;
@@ -373,7 +351,6 @@
         <button class="btn btn-warning" id="toggleVideoBtn"><i class="fas fa-video"></i> Video</button>
         <button class="btn-icon" id="cameraSwitchBtn" title="Switch Camera"><i class="fas fa-sync-alt"></i></button>
         <button class="btn btn-icon" id="toggleAudioBtn"><i class="fas fa-microphone"></i></button>
-        <button class="btn-speaker" id="speakerBtn" disabled><i class="fas fa-volume-up"></i></button>
     </div>
 
     <div class="info-line" id="infoLine"><i class="fas fa-info-circle"></i> Click "Go online" to get your Peer ID</div>
@@ -400,7 +377,6 @@
         const hangupBtn = document.getElementById('hangupBtn');
         const toggleVideoBtn = document.getElementById('toggleVideoBtn');
         const toggleAudioBtn = document.getElementById('toggleAudioBtn');
-        const speakerBtn = document.getElementById('speakerBtn');
         const cameraSwitchBtn = document.getElementById('cameraSwitchBtn');
         const remoteIdInput = document.getElementById('remoteIdInput');
         const remoteInputArea = document.getElementById('remoteInputArea');
@@ -414,7 +390,6 @@
         let isCallActive = false;
         let isVideoEnabled = true;
         let isAudioEnabled = true;
-        let isSpeakerOn = false;
         let isFrontCamera = true;
         let myPeerId = '';
         let remotePeerId = '';
@@ -440,20 +415,6 @@
 
         function generateId() {
             return 'wt-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
-        }
-
-        // ----- Speaker toggle (simplified - just UI feedback) -----
-        function toggleSpeaker() {
-            if (!remoteVideo) return;
-            isSpeakerOn = !isSpeakerOn;
-            
-            // Update UI
-            speakerBtn.classList.toggle('active', isSpeakerOn);
-            speakerBtn.innerHTML = isSpeakerOn ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-off"></i>';
-            updateInfo(isSpeakerOn ? '🔊 Speaker mode (check device settings)' : '🔇 Earpiece mode');
-            
-            // On mobile, audio routing is handled by the OS
-            // We just provide visual feedback
         }
 
         // ----- Camera switch -----
@@ -527,7 +488,6 @@
 
         function setButtons(callActive) {
             hangupBtn.disabled = !callActive;
-            speakerBtn.disabled = !callActive;
             cameraSwitchBtn.disabled = !isOnline;
             if (callActive) {
                 callBtn.disabled = true;
@@ -578,13 +538,10 @@
             isCallActive = false;
             isVideoEnabled = true;
             isAudioEnabled = true;
-            isSpeakerOn = false;
             isFrontCamera = true;
             cameraSwitchBtn.classList.remove('active');
             toggleVideoBtn.innerHTML = '<i class="fas fa-video"></i> Video';
             toggleAudioBtn.innerHTML = '<i class="fas fa-microphone"></i>';
-            speakerBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
-            speakerBtn.classList.remove('active');
             remotePeerId = '';
             isOnline = false;
             updateStatus('Offline', false);
@@ -840,9 +797,6 @@
             remotePlaceholder.innerHTML = '<i class="fas fa-video-slash"></i>';
             remotePlaceholder.style.fontSize = '2.6rem';
             isCallActive = false;
-            isSpeakerOn = false;
-            speakerBtn.classList.remove('active');
-            speakerBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
             setButtons(false);
             updateStatus(isOnline ? 'Ready' : 'Offline', isOnline);
             updateInfo(isOnline ? (currentMode === 'caller' ? 'Enter ID and call' : 'Waiting for incoming call...') : 'Not connected');
@@ -955,7 +909,6 @@
         hangupBtn.addEventListener('click', hangUp);
         toggleVideoBtn.addEventListener('click', toggleVideo);
         toggleAudioBtn.addEventListener('click', toggleAudio);
-        speakerBtn.addEventListener('click', toggleSpeaker);
         cameraSwitchBtn.addEventListener('click', switchCamera);
         myIdDisplay.addEventListener('click', editId);
 
