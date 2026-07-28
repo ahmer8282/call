@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>📡 WalkieTalk · Call or Receive</title>
+    <title>📡 WalkieTalk</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
@@ -87,7 +87,6 @@
             cursor: pointer;
             padding: 4px 8px;
             border-radius: 8px;
-            transition: background 0.2s;
         }
         .peer-row .my-id:hover {
             background: #2a3045;
@@ -260,7 +259,6 @@
         .btn:disabled { opacity: 0.35; transform: translateY(3px); box-shadow: 0 1px 0 #141824; pointer-events: none; }
         .btn-danger { background: #9e3d4a; border-color: #c95666; color: white; box-shadow: 0 4px 0 #632b33; }
         .btn-warning { background: #b8863a; border-color: #dfa84a; color: #1a1e2c; box-shadow: 0 4px 0 #7a5a24; }
-        .btn-primary { background: #3f4b6b; border-color: #5b6890; color: white; box-shadow: 0 4px 0 #1f263a; }
         .btn-icon {
             background: transparent;
             border: 1px solid #3f4865;
@@ -281,27 +279,6 @@
             color: #4caf84;
             border-color: #4caf84;
         }
-        .btn-speaker {
-            background: transparent;
-            border: 1px solid #3f4865;
-            border-radius: 60px;
-            padding: 8px 12px;
-            color: #bcc4e0;
-            font-size: 0.9rem;
-            box-shadow: none;
-            min-width: 44px;
-            flex: 0 1 auto;
-            cursor: pointer;
-            transition: 0.15s;
-            touch-action: manipulation;
-        }
-        .btn-speaker:active { transform: scale(0.94); }
-        .btn-speaker.active {
-            background: #2f3a57;
-            color: #4caf84;
-            border-color: #4caf84;
-        }
-        .btn-speaker:disabled { opacity: 0.35; pointer-events: none; }
 
         .info-line {
             margin-top: 10px;
@@ -335,32 +312,27 @@
 <body>
 
 <div class="container">
-    <!-- Header -->
     <div class="header">
         <h1><i class="fas fa-bolt"></i> WalkieTalk</h1>
         <div class="status-badge" id="statusBadge"><i class="fas fa-circle"></i> <span id="statusText">Offline</span></div>
     </div>
 
-    <!-- My Peer ID -->
     <div class="peer-row">
-        <span class="my-id" id="myIdDisplay">⚡ connecting...</span>
+        <span class="my-id" id="myIdDisplay">⚡ click to set ID</span>
         <button class="btn-sm" id="connectBtn"><i class="fas fa-plug"></i> Go online</button>
         <button class="btn-sm" id="copyBtn"><i class="far fa-copy"></i></button>
     </div>
 
-    <!-- Mode Toggle -->
     <div class="mode-toggle" id="modeToggle">
         <button class="mode-btn active" data-mode="caller"><i class="fas fa-phone-alt"></i> Caller</button>
         <button class="mode-btn" data-mode="receiver"><i class="fas fa-headset"></i> Receiver</button>
     </div>
 
-    <!-- Remote ID input (Caller mode) -->
     <div class="remote-input-area show" id="remoteInputArea">
         <input type="text" id="remoteIdInput" placeholder="Enter remote Peer ID to call..." />
         <button class="btn-call" id="callBtn"><i class="fas fa-phone-alt"></i> Call</button>
     </div>
 
-    <!-- Video -->
     <div class="video-grid">
         <div class="video-box">
             <video id="remoteVideo" autoplay playsinline></video>
@@ -374,17 +346,14 @@
         </div>
     </div>
 
-    <!-- Controls -->
     <div class="controls">
         <button class="btn btn-danger" id="hangupBtn" disabled><i class="fas fa-phone-slash"></i> Hangup</button>
         <button class="btn btn-warning" id="toggleVideoBtn"><i class="fas fa-video"></i> Video</button>
         <button class="btn-icon" id="cameraSwitchBtn" title="Switch Camera"><i class="fas fa-sync-alt"></i></button>
         <button class="btn btn-icon" id="toggleAudioBtn"><i class="fas fa-microphone"></i></button>
-        <button class="btn-speaker" id="speakerBtn" disabled><i class="fas fa-volume-up"></i></button>
     </div>
 
-    <!-- Info -->
-    <div class="info-line" id="infoLine"><i class="fas fa-info-circle"></i> Click "Go online" to get your Peer ID</div>
+    <div class="info-line" id="infoLine"><i class="fas fa-info-circle"></i> Click "Go online" to connect</div>
     <div class="footer">PeerJS · share your ID so others can call you</div>
 </div>
 
@@ -408,7 +377,6 @@
         const hangupBtn = document.getElementById('hangupBtn');
         const toggleVideoBtn = document.getElementById('toggleVideoBtn');
         const toggleAudioBtn = document.getElementById('toggleAudioBtn');
-        const speakerBtn = document.getElementById('speakerBtn');
         const cameraSwitchBtn = document.getElementById('cameraSwitchBtn');
         const remoteIdInput = document.getElementById('remoteIdInput');
         const remoteInputArea = document.getElementById('remoteInputArea');
@@ -422,7 +390,6 @@
         let isCallActive = false;
         let isVideoEnabled = true;
         let isAudioEnabled = true;
-        let isSpeakerOn = false;
         let isFrontCamera = true;
         let myPeerId = '';
         let remotePeerId = '';
@@ -450,57 +417,6 @@
             return 'wt-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
         }
 
-        // ----- Audio output routing -----
-        async function setAudioOutput(deviceId) {
-            try {
-                if (remoteVideo && remoteVideo.setSinkId) {
-                    await remoteVideo.setSinkId(deviceId);
-                    return true;
-                }
-                return false;
-            } catch (err) {
-                console.warn('setSinkId error:', err);
-                return false;
-            }
-        }
-
-        async function toggleSpeaker() {
-            if (!remoteVideo) return;
-            isSpeakerOn = !isSpeakerOn;
-            
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
-                
-                let targetDeviceId = 'default';
-                if (isSpeakerOn) {
-                    const speakerDevice = audioOutputs.find(d => 
-                        d.label && d.label.toLowerCase().includes('speaker')
-                    );
-                    if (speakerDevice) {
-                        targetDeviceId = speakerDevice.deviceId;
-                    } else if (audioOutputs.length > 1) {
-                        targetDeviceId = audioOutputs[1].deviceId;
-                    }
-                }
-                
-                const success = await setAudioOutput(targetDeviceId);
-                if (success) {
-                    speakerBtn.classList.toggle('active', isSpeakerOn);
-                    speakerBtn.innerHTML = isSpeakerOn ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-off"></i>';
-                    updateInfo(isSpeakerOn ? '🔊 Speaker mode' : '🔇 Earpiece mode');
-                } else {
-                    speakerBtn.classList.toggle('active', isSpeakerOn);
-                    speakerBtn.innerHTML = isSpeakerOn ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-off"></i>';
-                    updateInfo(isSpeakerOn ? '🔊 Speaker mode (simulated)' : '🔇 Earpiece mode (simulated)');
-                }
-            } catch (err) {
-                console.warn('Speaker toggle error:', err);
-                speakerBtn.classList.toggle('active', isSpeakerOn);
-                speakerBtn.innerHTML = isSpeakerOn ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-off"></i>';
-            }
-        }
-
         // ----- Camera switch -----
         async function switchCamera() {
             if (!localStream) {
@@ -512,18 +428,15 @@
             cameraSwitchBtn.classList.toggle('active', !isFrontCamera);
             
             try {
-                // Get current track settings
                 const videoTrack = localStream.getVideoTracks()[0];
                 if (!videoTrack) {
                     updateInfo('No video track to switch');
                     return;
                 }
 
-                // Stop current video track
                 videoTrack.stop();
                 localStream.removeTrack(videoTrack);
 
-                // Get new video track with opposite facing mode
                 const constraints = {
                     audio: false,
                     video: {
@@ -540,7 +453,6 @@
                     localStream.addTrack(newVideoTrack);
                     localVideo.srcObject = localStream;
                     
-                    // Update the call with new track if in a call
                     if (call && isCallActive) {
                         const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
                         if (sender) {
@@ -557,7 +469,7 @@
                 
             } catch (err) {
                 console.error('Camera switch error:', err);
-                isFrontCamera = !isFrontCamera; // revert
+                isFrontCamera = !isFrontCamera;
                 cameraSwitchBtn.classList.toggle('active', !isFrontCamera);
                 updateInfo('Camera switch failed: ' + err.message);
             }
@@ -576,19 +488,13 @@
 
         function setButtons(callActive) {
             hangupBtn.disabled = !callActive;
-            speakerBtn.disabled = !callActive;
             cameraSwitchBtn.disabled = !isOnline;
             if (callActive) {
                 callBtn.disabled = true;
                 callBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Calling...';
-                speakerBtn.style.display = 'inline-flex';
             } else {
                 callBtn.disabled = !isOnline || currentMode === 'receiver';
                 callBtn.innerHTML = '<i class="fas fa-phone-alt"></i> Call';
-                speakerBtn.style.display = 'inline-flex';
-                speakerBtn.classList.remove('active');
-                speakerBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
-                isSpeakerOn = false;
             }
         }
 
@@ -632,20 +538,17 @@
             isCallActive = false;
             isVideoEnabled = true;
             isAudioEnabled = true;
-            isSpeakerOn = false;
             isFrontCamera = true;
             cameraSwitchBtn.classList.remove('active');
             toggleVideoBtn.innerHTML = '<i class="fas fa-video"></i> Video';
             toggleAudioBtn.innerHTML = '<i class="fas fa-microphone"></i>';
-            speakerBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
-            speakerBtn.classList.remove('active');
             remotePeerId = '';
             isOnline = false;
             updateStatus('Offline', false);
             updateInfo('Click "Go online"');
             setButtons(false);
             connectBtn.innerHTML = '<i class="fas fa-plug"></i> Go online';
-            myIdDisplay.innerText = '⚡ offline';
+            myIdDisplay.innerText = '⚡ click to set ID';
             callBtn.innerHTML = '<i class="fas fa-phone-alt"></i> Call';
             callBtn.disabled = true;
         }
@@ -698,7 +601,7 @@
             }
         }
 
-        // ----- Connect Peer (with persistent ID) -----
+        // ----- Connect Peer -----
         function connectPeer() {
             if (peer) {
                 peer.destroy();
@@ -717,7 +620,7 @@
             updateInfo('Connecting to PeerJS network...');
 
             peer = new Peer(id, {
-                debug: 0,
+                debug: 2,
                 config: {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
@@ -789,6 +692,7 @@
                 fullReset();
             });
 
+            // ----- Auto-answer incoming calls -----
             peer.on('call', (incomingCall) => {
                 if (isCallActive) { 
                     incomingCall.answer(); 
@@ -845,12 +749,6 @@
                 remotePlaceholder.style.display = 'none';
                 updateStatus('Connected', true);
                 updateInfo('🔗 Active with ' + remotePeerId);
-                
-                if (!isSpeakerOn) {
-                    setTimeout(() => {
-                        toggleSpeaker();
-                    }, 500);
-                }
             });
             
             mediaCall.on('close', () => { 
@@ -865,14 +763,23 @@
 
         // ----- Make outgoing call -----
         async function makeCall() {
-            if (!peer) { alert('Connect first'); return; }
-            if (!isOnline) { alert('Not connected to PeerJS'); return; }
+            if (!peer) { 
+                alert('Connect first - click "Go online"'); 
+                return; 
+            }
+            if (!isOnline) { 
+                alert('Not connected to PeerJS'); 
+                return; 
+            }
             if (!localStream) {
                 await startLocalStream();
                 if (!localStream) return;
             }
             const target = remoteIdInput.value.trim();
-            if (!target) { alert('Enter remote Peer ID'); return; }
+            if (!target) { 
+                alert('Enter remote Peer ID'); 
+                return; 
+            }
             remotePeerId = target;
             
             const mediaCall = peer.call(remotePeerId, localStream);
@@ -899,9 +806,6 @@
             remotePlaceholder.innerHTML = '<i class="fas fa-video-slash"></i>';
             remotePlaceholder.style.fontSize = '2.6rem';
             isCallActive = false;
-            isSpeakerOn = false;
-            speakerBtn.classList.remove('active');
-            speakerBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
             setButtons(false);
             updateStatus(isOnline ? 'Ready' : 'Offline', isOnline);
             updateInfo(isOnline ? (currentMode === 'caller' ? 'Enter ID and call' : 'Waiting for incoming call...') : 'Not connected');
@@ -911,10 +815,6 @@
                 remotePlaceholder.style.fontSize = '3rem';
                 remotePlaceholder.style.display = 'flex';
             }
-            
-            try {
-                setAudioOutput('default');
-            } catch(e) {}
         }
 
         // ----- Toggle video / audio -----
@@ -957,10 +857,20 @@
             alert('Copied: ' + text);
         }
 
-        // ----- Edit ID (click to change) -----
+        // ----- Edit ID -----
         function editId() {
             const currentId = myIdDisplay.innerText;
-            if (currentId.includes('⚡')) return;
+            if (currentId.includes('⚡')) {
+                // First time setup - suggest a random ID
+                const suggested = generateId();
+                const newId = prompt('Enter your Peer ID (must be unique):', suggested);
+                if (newId && newId.trim() !== '') {
+                    storeId(newId.trim());
+                    myIdDisplay.innerText = newId.trim();
+                    updateInfo('ID set. Click "Go online" to connect');
+                }
+                return;
+            }
             const newId = prompt('Enter your Peer ID (must be unique):', currentId);
             if (newId && newId.trim() !== '' && newId !== currentId) {
                 const trimmed = newId.trim();
@@ -1018,7 +928,6 @@
         hangupBtn.addEventListener('click', hangUp);
         toggleVideoBtn.addEventListener('click', toggleVideo);
         toggleAudioBtn.addEventListener('click', toggleAudio);
-        speakerBtn.addEventListener('click', toggleSpeaker);
         cameraSwitchBtn.addEventListener('click', switchCamera);
         myIdDisplay.addEventListener('click', editId);
 
@@ -1034,7 +943,14 @@
 
         // Auto-connect on load
         window.addEventListener('load', () => {
-            setTimeout(connectPeer, 1000);
+            const storedId = getStoredId();
+            if (storedId) {
+                myIdDisplay.innerText = storedId;
+                setTimeout(connectPeer, 1000);
+            } else {
+                myIdDisplay.innerText = '⚡ click to set ID';
+                updateInfo('Click your ID to set a Peer ID, then click "Go online"');
+            }
         });
 
         // expose
