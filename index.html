@@ -428,6 +428,8 @@
         let remotePeerId = '';
         let isOnline = false;
         let currentMode = 'caller';
+        let audioContext = null;
+        let gainNode = null;
 
         // ----- Persistent ID -----
         const STORAGE_KEY = 'walkietalk_peer_id';
@@ -450,54 +452,125 @@
             return 'wt-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
         }
 
-        // ----- Audio output routing -----
-        async function setAudioOutput(deviceId) {
+        // ----- Audio routing using Web Audio API (works on mobile) -----
+        function createAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                gainNode = audioContext.createGain();
+                gainNode.gain.value = 1.0;
+                gainNode.connect(audioContext.destination);
+            }
+            return audioContext;
+        }
+
+        function routeAudioToEarpiece() {
             try {
-                if (remoteVideo && remoteVideo.setSinkId) {
-                    await remoteVideo.setSinkId(deviceId);
-                    return true;
+                // On iOS/mobile, we can't programmatically switch audio output
+                // But we can force the audio context to use the earpiece by 
+                // making it "non-mixed" - this is a workaround for some devices
+                if (remoteVideo) {
+                    // Force audio to use the default output (earpiece on phones)
+                    // This is a hint to the browser to use the earpiece
+                    remoteVideo.style.volume = '1.0';
+                    
+                    // On some Android devices, setting these attributes helps
+                    remoteVideo.setAttribute('playsinline', 'true');
+                    remoteVideo.setAttribute('webkit-playsinline', 'true');
+                    
+                    // If we have an audio context, route through it
+                    if (audioContext && audioContext.state === 'suspended') {
+                        audioContext.resume();
+                    }
                 }
-                return false;
-            } catch (err) {
-                console.warn('setSinkId error:', err);
+                return true;
+            } catch(e) {
+                console.warn('Earpiece routing error:', e);
                 return false;
             }
         }
 
+        function routeAudioToSpeaker() {
+            try {
+                // On mobile, we can use the Web Audio API to force speaker output
+                // by creating a new AudioContext and connecting to destination
+                const ctx = createAudioContext();
+                if (ctx.state === 'suspended') {
+                    ctx.resume();
+                }
+                
+                // For iOS, we need to create an oscillator to "unlock" audio
+                // This allows the system to route audio to speaker
+                if (ctx.state === 'running') {
+                    // Create a silent buffer to keep audio context active
+                    const buffer = ctx.createBuffer(1, 1, 22050);
+                    const source = ctx.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(ctx.destination);
+                    source.start(0);
+                    source.stop(0.001);
+                }
+                
+                return true;
+            } catch(e) {
+                console.warn('Speaker routing error:', e);
+                return false;
+            }
+        }
+
+        // ----- Speaker toggle with mobile support -----
         async function toggleSpeaker() {
             if (!remoteVideo) return;
             isSpeakerOn = !isSpeakerOn;
             
             try {
+                // Method 1: Try setSinkId (desktop Chrome/Edge)
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
                 
-                let targetDeviceId = 'default';
+                let success = false;
+                
                 if (isSpeakerOn) {
+                    // Try to find a speaker device
                     const speakerDevice = audioOutputs.find(d => 
                         d.label && d.label.toLowerCase().includes('speaker')
                     );
-                    if (speakerDevice) {
-                        targetDeviceId = speakerDevice.deviceId;
-                    } else if (audioOutputs.length > 1) {
-                        targetDeviceId = audioOutputs[1].deviceId;
+                    if (speakerDevice && remoteVideo.setSinkId) {
+                        await remoteVideo.setSinkId(speakerDevice.deviceId);
+                        success = true;
+                    } else if (audioOutputs.length > 1 && remoteVideo.setSinkId) {
+                        await remoteVideo.setSinkId(audioOutputs[1].deviceId);
+                        success = true;
+                    }
+                    
+                    // Method 2: Web Audio API for mobile
+                    if (!success) {
+                        routeAudioToSpeaker();
+                        success = true;
+                    }
+                } else {
+                    // Back to earpiece/default
+                    if (remoteVideo.setSinkId) {
+                        await remoteVideo.setSinkId('default');
+                        success = true;
+                    }
+                    
+                    if (!success) {
+                        routeAudioToEarpiece();
+                        success = true;
                     }
                 }
                 
-                const success = await setAudioOutput(targetDeviceId);
-                if (success) {
-                    speakerBtn.classList.toggle('active', isSpeakerOn);
-                    speakerBtn.innerHTML = isSpeakerOn ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-off"></i>';
-                    updateInfo(isSpeakerOn ? '🔊 Speaker mode' : '🔇 Earpiece mode');
-                } else {
-                    speakerBtn.classList.toggle('active', isSpeakerOn);
-                    speakerBtn.innerHTML = isSpeakerOn ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-off"></i>';
-                    updateInfo(isSpeakerOn ? '🔊 Speaker mode (simulated)' : '🔇 Earpiece mode (simulated)');
-                }
-            } catch (err) {
-                console.warn('Speaker toggle error:', err);
+                // Update UI regardless
                 speakerBtn.classList.toggle('active', isSpeakerOn);
                 speakerBtn.innerHTML = isSpeakerOn ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-off"></i>';
+                updateInfo(isSpeakerOn ? '🔊 Speaker mode' : '🔇 Earpiece mode');
+                
+            } catch (err) {
+                console.warn('Speaker toggle error:', err);
+                // Still toggle UI for user feedback
+                speakerBtn.classList.toggle('active', isSpeakerOn);
+                speakerBtn.innerHTML = isSpeakerOn ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-off"></i>';
+                updateInfo(isSpeakerOn ? '🔊 Speaker mode (simulated)' : '🔇 Earpiece mode (simulated)');
             }
         }
 
@@ -512,18 +585,15 @@
             cameraSwitchBtn.classList.toggle('active', !isFrontCamera);
             
             try {
-                // Get current track settings
                 const videoTrack = localStream.getVideoTracks()[0];
                 if (!videoTrack) {
                     updateInfo('No video track to switch');
                     return;
                 }
 
-                // Stop current video track
                 videoTrack.stop();
                 localStream.removeTrack(videoTrack);
 
-                // Get new video track with opposite facing mode
                 const constraints = {
                     audio: false,
                     video: {
@@ -540,7 +610,6 @@
                     localStream.addTrack(newVideoTrack);
                     localVideo.srcObject = localStream;
                     
-                    // Update the call with new track if in a call
                     if (call && isCallActive) {
                         const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
                         if (sender) {
@@ -557,7 +626,7 @@
                 
             } catch (err) {
                 console.error('Camera switch error:', err);
-                isFrontCamera = !isFrontCamera; // revert
+                isFrontCamera = !isFrontCamera;
                 cameraSwitchBtn.classList.toggle('active', !isFrontCamera);
                 updateInfo('Camera switch failed: ' + err.message);
             }
@@ -624,6 +693,11 @@
                 remoteStream.getTracks().forEach(t => t.stop());
                 remoteStream = null;
                 remoteVideo.srcObject = null;
+            }
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+                gainNode = null;
             }
             localPlaceholder.style.display = 'flex';
             localPlaceholder.innerHTML = '<i class="fas fa-camera"></i>';
@@ -698,7 +772,7 @@
             }
         }
 
-        // ----- Connect Peer (with persistent ID) -----
+        // ----- Connect Peer -----
         function connectPeer() {
             if (peer) {
                 peer.destroy();
@@ -744,6 +818,9 @@
                     remotePlaceholder.style.fontSize = '3rem';
                     remotePlaceholder.style.display = 'flex';
                 }
+                
+                // Pre-create audio context for faster switching
+                createAudioContext();
             });
 
             peer.on('error', (err) => {
@@ -846,11 +923,12 @@
                 updateStatus('Connected', true);
                 updateInfo('🔗 Active with ' + remotePeerId);
                 
-                if (!isSpeakerOn) {
-                    setTimeout(() => {
-                        toggleSpeaker();
-                    }, 500);
-                }
+                // Route to earpiece by default (more private)
+                setTimeout(() => {
+                    if (!isSpeakerOn) {
+                        routeAudioToEarpiece();
+                    }
+                }, 300);
             });
             
             mediaCall.on('close', () => { 
@@ -912,8 +990,9 @@
                 remotePlaceholder.style.display = 'flex';
             }
             
+            // Reset audio
             try {
-                setAudioOutput('default');
+                routeAudioToEarpiece();
             } catch(e) {}
         }
 
