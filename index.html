@@ -1,466 +1,487 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Direct Walkie-Talkie (UAE Optimized)</title>
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-    <style>
-        :root {
-            --bg-color: #121212;
-            --card-bg: rgba(30, 30, 30, 0.95);
-            --primary: #007aff;
-            --danger: #ff3b30;
-            --success: #34c759;
-            --warning: #ff9500;
-            --text: #ffffff;
-            --text-secondary: #8e8e93;
-        }
-        * { box-sizing: border-box; }
-        html, body {
-            margin: 0; padding: 0; height: 100%; overflow: hidden;
-            background-color: var(--bg-color); color: var(--text);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
-        body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
-        .video-container {
-            flex: 1; position: relative; background: #000;
-            display: flex; align-items: center; justify-content: center;
-            min-height: 0; overflow: hidden;
-        }
-        video { width: 100%; height: 100%; object-fit: cover; background: #000; }
-        #remoteVideo { z-index: 1; }
-        #localVideo {
-            position: absolute; bottom: 15px; right: 15px;
-            width: 90px; height: 120px; border-radius: 10px;
-            border: 2px solid rgba(255,255,255,0.3); z-index: 2;
-            object-fit: cover; transform: scaleX(-1);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-        }
-        .controls {
-            background: var(--card-bg); backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px); padding: 15px;
-            padding-bottom: calc(15px + env(safe-area-inset-bottom));
-            display: flex; flex-direction: column; gap: 12px;
-            border-top-left-radius: 20px; border-top-right-radius: 20px;
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.6);
-            flex-shrink: 0; max-height: 45vh; overflow-y: auto;
-        }
-        .room-code-display {
-            background: rgba(0, 122, 255, 0.15); border: 1px solid var(--primary);
-            padding: 15px; border-radius: 12px; text-align: center;
-        }
-        .room-code-display label {
-            display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;
-        }
-        .room-code-display .code {
-            font-size: 32px; font-weight: 700; color: var(--primary);
-            font-family: monospace; letter-spacing: 4px;
-        }
-        .share-buttons { display: flex; gap: 8px; }
-        .share-btn {
-            flex: 1; padding: 12px; border: none; border-radius: 8px;
-            font-size: 14px; font-weight: 600; cursor: pointer; color: white;
-            display: flex; align-items: center; justify-content: center; gap: 6px;
-        }
-        .share-btn.copy { background: var(--primary); }
-        .share-btn.qr { background: var(--warning); }
-        .qr-container {
-            background: white; padding: 15px; border-radius: 12px;
-            display: flex; justify-content: center; align-items: center;
-        }
-        button {
-            padding: 14px 16px; border: none; border-radius: 10px;
-            font-size: 16px; font-weight: 600; cursor: pointer;
-            transition: all 0.2s; color: white;
-            -webkit-tap-highlight-color: transparent; width: 100%;
-        }
-        button:active { transform: scale(0.96); }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-primary { background: var(--primary); }
-        .btn-danger { background: var(--danger); }
-        .btn-success { background: var(--success); }
-        .status { text-align: center; font-size: 13px; color: var(--text-secondary); min-height: 18px; }
-        .hidden { display: none !important; }
-        .walkie-controls { display: flex; flex-direction: column; gap: 12px; }
-        .room-display {
-            background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px;
-            text-align: center; font-size: 14px;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .room-display strong { color: var(--primary); font-size: 18px; }
-        .mode-badge {
-            background: var(--success); color: #fff;
-            padding: 4px 10px; border-radius: 12px;
-            font-size: 11px; font-weight: 700;
-        }
-        .ptt-button {
-            padding: 20px; font-size: 20px; font-weight: 700;
-            border-radius: 12px; display: flex; align-items: center;
-            justify-content: center; gap: 10px; transition: all 0.15s;
-        }
-        .ptt-button.muted {
-            background: var(--danger);
-            box-shadow: 0 0 20px rgba(255, 59, 48, 0.4);
-        }
-        .ptt-button.unmuted {
-            background: var(--success);
-            box-shadow: 0 0 20px rgba(52, 199, 89, 0.4);
-        }
-        .ptt-button:active { transform: scale(0.95); }
-        .action-row { display: flex; gap: 8px; }
-        .action-row button { flex: 1; padding: 12px; font-size: 14px; }
-        .toast {
-            position: fixed; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.9); color: white;
-            padding: 15px 25px; border-radius: 12px;
-            font-size: 16px; z-index: 1000; opacity: 0;
-            transition: opacity 0.3s; pointer-events: none;
-        }
-        .toast.show { opacity: 1; }
-        .vpn-notice {
-            background: rgba(255, 149, 0, 0.15);
-            border: 1px solid var(--warning);
-            padding: 10px; border-radius: 8px;
-            font-size: 12px; color: var(--text-secondary);
-            line-height: 1.5;
-        }
-        .vpn-notice strong { color: var(--warning); }
-        @media (orientation: landscape) and (max-height: 500px) {
-            .controls { padding: 10px; gap: 8px; max-height: 50vh; }
-            .ptt-button { padding: 12px; font-size: 16px; }
-            .room-code-display .code { font-size: 24px; }
-            #localVideo { width: 60px; height: 80px; bottom: 10px; right: 10px; }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Channel — Walkie Talkie Call</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  :root{
+    --bg: #14170f;
+    --panel: #1c2016;
+    --panel-2: #22271b;
+    --line: #3a4230;
+    --amber: #ff8a1e;
+    --amber-dim: #7a4c1e;
+    --green: #59d67c;
+    --red: #ff4d4d;
+    --ink: #eef0e6;
+    --ink-dim: #9aa38b;
+    --lcd: #c8ffb0;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse at 50% -10%, #262c1c 0%, var(--bg) 55%);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    overflow-x:hidden;
+    min-height:100dvh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+  }
+  .rig{
+    width:100%;
+    max-width:460px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:2px 4px 6px;
+  }
+  header .brand{
+    font-weight:800;
+    letter-spacing:0.02em;
+    font-size:15px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  header .brand .dot{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--ink-dim);
+    box-shadow:0 0 0 3px rgba(255,255,255,0.03);
+  }
+  header .brand .dot.live{ background:var(--green); box-shadow:0 0 10px var(--green); }
+  header .sub{ font-size:11px; color:var(--ink-dim); letter-spacing:0.08em; text-transform:uppercase;}
+
+  .panel{
+    background:linear-gradient(180deg, var(--panel-2), var(--panel));
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:16px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 24px rgba(0,0,0,0.35);
+  }
+
+  .lcd{
+    font-family:'Share Tech Mono', monospace;
+    background:#0d150a;
+    border:1px solid #2a3320;
+    border-radius:10px;
+    padding:10px 12px;
+    color:var(--lcd);
+    font-size:13px;
+    letter-spacing:0.06em;
+    min-height:20px;
+    word-break:break-word;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.6);
+  }
+
+  label.field{
+    display:block;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.1em;
+    color:var(--ink-dim);
+    margin:0 0 6px 2px;
+  }
+  input[type=text]{
+    width:100%;
+    background:#0d120a;
+    border:1px solid var(--line);
+    color:var(--ink);
+    font-family:'Share Tech Mono', monospace;
+    font-size:16px;
+    letter-spacing:0.08em;
+    padding:12px 14px;
+    border-radius:10px;
+    outline:none;
+  }
+  input[type=text]:focus{ border-color:var(--amber); }
+
+  .row{ display:flex; gap:10px; }
+  .row > *{ flex:1; }
+
+  button{
+    font-family:'Inter',sans-serif;
+    border:none;
+    cursor:pointer;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+  .btn{
+    padding:13px 16px;
+    border-radius:10px;
+    font-weight:700;
+    font-size:14px;
+    letter-spacing:0.02em;
+    background:#2a3120;
+    color:var(--ink);
+    border:1px solid var(--line);
+    transition:transform .08s ease;
+  }
+  .btn:active{ transform:scale(0.97); }
+  .btn.primary{ background:linear-gradient(180deg,#ff9a3d,var(--amber)); color:#241200; border:none; }
+  .btn.danger{ background:linear-gradient(180deg,#ff6a6a,var(--red)); color:#2a0000; border:none; }
+  .btn:disabled{ opacity:0.4; cursor:not-allowed; }
+  .btn.ghost{ background:transparent; border:1px solid var(--line); }
+
+  .videos{
+    position:relative;
+    width:100%;
+    aspect-ratio: 3/4;
+    background:#0a0d07;
+    border-radius:16px;
+    overflow:hidden;
+    border:1px solid var(--line);
+  }
+  video{ width:100%; height:100%; object-fit:cover; background:#0a0d07; }
+  #remoteVideo{ position:absolute; inset:0; }
+  #localVideo{
+    position:absolute;
+    width:30%;
+    max-width:120px;
+    aspect-ratio:3/4;
+    right:10px; top:10px;
+    border-radius:10px;
+    border:2px solid var(--amber-dim);
+    object-fit:cover;
+    z-index:2;
+  }
+  .badge{
+    position:absolute; left:10px; top:10px; z-index:3;
+    font-family:'Share Tech Mono', monospace;
+    font-size:11px; letter-spacing:0.08em;
+    background:rgba(0,0,0,0.5);
+    border:1px solid var(--line);
+    padding:5px 9px;
+    border-radius:8px;
+    color:var(--ink-dim);
+  }
+  .badge.on{ color:#ffd7a8; border-color:var(--amber); background:rgba(122,60,10,0.55); }
+  .placeholder{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--ink-dim); font-size:13px; text-align:center; padding:20px;
+  }
+
+  .ptt-wrap{ display:flex; flex-direction:column; align-items:center; gap:10px; padding:8px 0 4px; }
+  .ptt{
+    width:150px; height:150px; border-radius:50%;
+    background: radial-gradient(circle at 35% 30%, #3a4430, #1d2216 70%);
+    border:3px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    flex-direction:column;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.5), inset 0 2px 6px rgba(255,255,255,0.04);
+    transition: transform .06s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;
+  }
+  .ptt .icon{ font-size:34px; line-height:1; }
+  .ptt .lbl{ font-size:12px; font-weight:800; letter-spacing:0.1em; margin-top:6px; color:var(--ink-dim); }
+  .ptt.active{
+    background: radial-gradient(circle at 35% 30%, #ffb35c, var(--amber) 70%);
+    border-color:#ffcf94;
+    transform:scale(0.96);
+    box-shadow: 0 0 0 10px rgba(255,138,30,0.15), 0 0 24px rgba(255,138,30,0.5);
+  }
+  .ptt.active .lbl, .ptt.active .icon{ color:#241200; }
+  .ptt:not(.active) .icon, .ptt:not(.active) .lbl { color: var(--ink-dim); }
+  .ptt.disabled{ opacity:0.35; pointer-events:none; }
+
+  .controls-row{ display:flex; gap:10px; justify-content:center; }
+  .iconbtn{
+    width:46px; height:46px; border-radius:50%;
+    background:#22271b; border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    font-size:18px;
+  }
+  .iconbtn.off{ background: rgba(255,77,77,0.15); border-color:var(--red); }
+
+  .hint{ font-size:11.5px; color:var(--ink-dim); line-height:1.5; padding:2px 4px; }
+  .hint b{ color:var(--ink); }
+
+  footer{ margin-top:2px; text-align:center; font-size:10.5px; color:#5c6650; padding-bottom:6px;}
+
+  @media (min-width:480px){
+    .videos{ aspect-ratio: 16/10; }
+  }
+</style>
 </head>
 <body>
-    <div class="video-container">
-        <video id="remoteVideo" autoplay playsinline muted></video>
-        <video id="localVideo" autoplay playsinline muted></video>
+<div class="rig">
+
+  <header>
+    <div class="brand"><span class="dot" id="liveDot"></span> CHANNEL</div>
+    <div class="sub" id="statusText">Off air</div>
+  </header>
+
+  <!-- SETUP PANEL -->
+  <div class="panel" id="setupPanel">
+    <label class="field">Channel name (share this with the other person)</label>
+    <input type="text" id="roomInput" placeholder="e.g. desert-fox" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <div class="row" style="margin-top:12px;">
+      <button class="btn primary" id="hostBtn">Open Channel</button>
+      <button class="btn" id="joinBtn">Join Channel</button>
+    </div>
+    <div class="lcd" id="lcdLine" style="margin-top:12px;">Enter a channel name, then one person taps "Open Channel" and the other taps "Join Channel".</div>
+  </div>
+
+  <!-- CALL PANEL -->
+  <div class="panel" id="callPanel" style="display:none;">
+    <div class="videos">
+      <video id="remoteVideo" autoplay playsinline></video>
+      <div class="placeholder" id="remotePlaceholder">Waiting for the other side to join…</div>
+      <video id="localVideo" autoplay playsinline muted></video>
+      <div class="badge" id="airBadge">STANDBY</div>
     </div>
 
-    <div class="controls" id="setupScreen">
-        <div class="status">Your Direct Room Code:</div>
-        
-        <div class="room-code-display">
-            <label>Share this link or QR code:</label>
-            <div class="code" id="roomCode">----</div>
-        </div>
-
-        <div class="vpn-notice">
-            <strong>🇦🇪 UAE Users:</strong> If audio doesn't work, your ISP may be blocking VoIP. 
-            Please use a VPN (like Turbo VPN, 1.1.1.1, or ProtonVPN) and try again.
-        </div>
-
-        <div class="share-buttons">
-            <button class="share-btn copy" id="copyLinkBtn">📋 Copy Link</button>
-            <button class="share-btn qr" id="showQrBtn">📱 Show QR</button>
-        </div>
-
-        <div class="qr-container hidden" id="qrContainer">
-            <div id="qrcode"></div>
-        </div>
-
-        <button class="btn-success" id="joinBtn">📹 Join Room</button>
+    <div class="ptt-wrap">
+      <button class="ptt" id="pttBtn">
+        <span class="icon">🎙️</span>
+        <span class="lbl">HOLD TO TALK</span>
+      </button>
+      <div class="controls-row">
+        <button class="iconbtn" id="camBtn" title="Toggle camera">📷</button>
+        <button class="iconbtn" id="switchCamBtn" title="Switch camera">🔄</button>
+        <button class="iconbtn off" id="endBtn" title="End call">✕</button>
+      </div>
     </div>
+    <div class="hint">Press and hold the mic button to transmit, like a radio. Release to listen. Video stays on the whole time.</div>
+  </div>
 
-    <div class="controls hidden" id="callScreen">
-        <div class="walkie-controls">
-            <div class="room-display">
-                <span>Room: <strong id="currentRoom">-</strong></span>
-                <span class="mode-badge">TCP 443 Mode</span>
-            </div>
-            
-            <div class="status" id="statusCall">Initializing connection...</div>
+  <div class="hint" id="networkHint">
+    Tip for UAE networks: this uses encrypted, standard HTTPS-style traffic (TURN over port 443) to help the call connect on mobile data and most WiFi. If a call won't connect on one network, try switching between WiFi and mobile data.
+  </div>
 
-            <button class="ptt-button unmuted" id="pttBtn">
-                <span id="pttIcon">🎤</span>
-                <span id="pttText">TAP TO MUTE</span>
-            </button>
+  <footer>Peer-to-peer call · nothing is recorded or stored on a server</footer>
+</div>
 
-            <div class="action-row">
-                <button class="btn-success" id="camBtn" disabled>📹 Camera ON</button>
-                <button class="btn-danger" id="hangupBtn">📞 Leave</button>
-            </div>
-        </div>
-    </div>
+<script>
+(function(){
+  const setupPanel = document.getElementById('setupPanel');
+  const callPanel = document.getElementById('callPanel');
+  const roomInput = document.getElementById('roomInput');
+  const hostBtn = document.getElementById('hostBtn');
+  const joinBtn = document.getElementById('joinBtn');
+  const lcdLine = document.getElementById('lcdLine');
+  const statusText = document.getElementById('statusText');
+  const liveDot = document.getElementById('liveDot');
+  const remoteVideo = document.getElementById('remoteVideo');
+  const localVideo = document.getElementById('localVideo');
+  const remotePlaceholder = document.getElementById('remotePlaceholder');
+  const pttBtn = document.getElementById('pttBtn');
+  const airBadge = document.getElementById('airBadge');
+  const camBtn = document.getElementById('camBtn');
+  const switchCamBtn = document.getElementById('switchCamBtn');
+  const endBtn = document.getElementById('endBtn');
 
-    <div class="toast" id="toast"></div>
+  let peer = null;
+  let currentCall = null;
+  let localStream = null;
+  let facingMode = 'user';
+  const ROOM_PREFIX = 'wtchan-';
 
-    <script>
-        const roomCodeDisplay = document.getElementById('roomCode');
-        const joinBtn = document.getElementById('joinBtn');
-        const setupScreen = document.getElementById('setupScreen');
-        const callScreen = document.getElementById('callScreen');
-        const currentRoomDisplay = document.getElementById('currentRoom');
-        const statusCall = document.getElementById('statusCall');
-        const pttBtn = document.getElementById('pttBtn');
-        const pttIcon = document.getElementById('pttIcon');
-        const pttText = document.getElementById('pttText');
-        const camBtn = document.getElementById('camBtn');
-        const hangupBtn = document.getElementById('hangupBtn');
-        const copyLinkBtn = document.getElementById('copyLinkBtn');
-        const showQrBtn = document.getElementById('showQrBtn');
-        const qrContainer = document.getElementById('qrContainer');
-        const toast = document.getElementById('toast');
-        const localVideo = document.getElementById('localVideo');
-        const remoteVideo = document.getElementById('remoteVideo');
+  function setStatus(text, live){
+    statusText.textContent = text;
+    liveDot.classList.toggle('live', !!live);
+  }
 
-        let myRoom, qrCode = null;
-        let peer, localStream, currentCall;
-        let myUserId, otherUserId, registrationAttempt = 1;
+  function sanitizeRoom(v){
+    return v.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+  }
 
-        function generateRoomCode() {
-            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-            let code = '';
-            for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
-            return code;
-        }
+  async function getLocalStream(){
+    if(localStream) return localStream;
+    localStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true },
+      video: { facingMode: facingMode, width:{ideal:640}, height:{ideal:480} }
+    });
+    // start muted (walkie-talkie: not transmitting until PTT held)
+    localStream.getAudioTracks().forEach(t => t.enabled = false);
+    localVideo.srcObject = localStream;
+    return localStream;
+  }
 
-        function getRoomFromUrl() {
-            const params = new URLSearchParams(window.location.search);
-            return params.get('room')?.toUpperCase();
-        }
+  function iceConfig(){
+    return {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:global.stun.twilio.com:3478' },
+        { urls: 'turn:openrelay.metered.ca:80', username:'openrelayproject', credential:'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443', username:'openrelayproject', credential:'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username:'openrelayproject', credential:'openrelayproject' }
+      ]
+    };
+  }
 
-        function showToast(message) {
-            toast.textContent = message;
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 2500);
-        }
+  function showCallPanel(){
+    setupPanel.style.display = 'none';
+    callPanel.style.display = 'block';
+  }
 
-        function initRoom() {
-            myRoom = getRoomFromUrl() || generateRoomCode();
-            roomCodeDisplay.textContent = myRoom;
-            if (!getRoomFromUrl()) {
-                const newUrl = `${window.location.origin}${window.location.pathname}?room=${myRoom}`;
-                window.history.replaceState({}, '', newUrl);
-            }
-        }
+  function wireCall(call){
+    currentCall = call;
+    call.on('stream', remoteStream => {
+      remoteVideo.srcObject = remoteStream;
+      remotePlaceholder.style.display = 'none';
+      setStatus('Connected', true);
+      lcdLine.textContent = 'Connected. Hold the mic button to talk.';
+    });
+    call.on('close', endCallCleanup);
+    call.on('error', err => {
+      console.error(err);
+      setStatus('Call error', false);
+    });
+  }
 
-        copyLinkBtn.addEventListener('click', async () => {
-            const shareUrl = `${window.location.origin}${window.location.pathname}?room=${myRoom}`;
-            try {
-                await navigator.clipboard.writeText(shareUrl);
-                showToast('✅ Link copied!');
-            } catch (err) {
-                const textArea = document.createElement('textarea');
-                textArea.value = shareUrl;
-                textArea.style.position = 'fixed';
-                textArea.style.left = '-999999px';
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-                showToast('✅ Link copied!');
-            }
-        });
+  function endCallCleanup(){
+    setStatus('Off air', false);
+    remotePlaceholder.style.display = 'flex';
+    remoteVideo.srcObject = null;
+  }
 
-        showQrBtn.addEventListener('click', () => {
-            if (qrContainer.classList.contains('hidden')) {
-                const shareUrl = `${window.location.origin}${window.location.pathname}?room=${myRoom}`;
-                if (!qrCode) {
-                    qrCode = new QRCode(document.getElementById('qrcode'), {
-                        text: shareUrl, width: 180, height: 180,
-                        colorDark: '#000000', colorLight: '#ffffff',
-                        correctLevel: QRCode.CorrectLevel.H
-                    });
-                }
-                qrContainer.classList.remove('hidden');
-                showQrBtn.textContent = '📱 Hide QR';
-            } else {
-                qrContainer.classList.add('hidden');
-                showQrBtn.textContent = '📱 Show QR';
-            }
-        });
+  async function hostChannel(){
+    const room = sanitizeRoom(roomInput.value);
+    if(!room){ lcdLine.textContent = 'Type a channel name first.'; return; }
+    hostBtn.disabled = true; joinBtn.disabled = true;
+    lcdLine.textContent = 'Opening channel "' + room + '"…';
+    try{
+      await getLocalStream();
+    }catch(e){
+      lcdLine.textContent = 'Camera/mic permission is needed to open a channel.';
+      hostBtn.disabled = false; joinBtn.disabled = false;
+      return;
+    }
+    peer = new Peer(ROOM_PREFIX + room, { config: iceConfig() });
+    peer.on('open', id => {
+      showCallPanel();
+      setStatus('Channel open — waiting…', false);
+    });
+    peer.on('call', call => {
+      call.answer(localStream);
+      wireCall(call);
+    });
+    peer.on('error', err => {
+      console.error(err);
+      if(err.type === 'unavailable-id'){
+        lcdLine.textContent = 'That channel name is already open. Try "Join Channel" instead, or pick a new name.';
+      } else {
+        lcdLine.textContent = 'Connection error: ' + err.type;
+      }
+      hostBtn.disabled = false; joinBtn.disabled = false;
+    });
+  }
 
-        joinBtn.addEventListener('click', async () => {
-            joinBtn.disabled = true;
-            joinBtn.textContent = '⏳ Starting camera...';
+  async function joinChannel(){
+    const room = sanitizeRoom(roomInput.value);
+    if(!room){ lcdLine.textContent = 'Type the channel name to join.'; return; }
+    hostBtn.disabled = true; joinBtn.disabled = true;
+    lcdLine.textContent = 'Joining channel "' + room + '"…';
+    try{
+      await getLocalStream();
+    }catch(e){
+      lcdLine.textContent = 'Camera/mic permission is needed to join a channel.';
+      hostBtn.disabled = false; joinBtn.disabled = false;
+      return;
+    }
+    peer = new Peer({ config: iceConfig() });
+    peer.on('open', () => {
+      const call = peer.call(ROOM_PREFIX + room, localStream);
+      showCallPanel();
+      setStatus('Connecting…', false);
+      wireCall(call);
+    });
+    peer.on('error', err => {
+      console.error(err);
+      lcdLine.textContent = 'Could not reach that channel. Make sure the other person has it open, and the name matches exactly.';
+      hostBtn.disabled = false; joinBtn.disabled = false;
+    });
+  }
 
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, 
-                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-                });
-                
-                localVideo.srcObject = localStream;
-                await localVideo.play();
-                
-                const audioTrack = localStream.getAudioTracks()[0];
-                if (audioTrack) audioTrack.enabled = true;
-                
-                updatePTTButton(false);
-                updateCamButton(false);
-                camBtn.disabled = false;
-                currentRoomDisplay.textContent = myRoom;
-                
-                setupScreen.classList.add('hidden');
-                callScreen.classList.remove('hidden');
-                
-                initPeer();
-            } catch (err) {
-                console.error('Media error:', err);
-                alert('Camera/Mic access denied: ' + err.message);
-                joinBtn.disabled = false;
-                joinBtn.textContent = '📹 Retry';
-            }
-        });
+  hostBtn.addEventListener('click', hostChannel);
+  joinBtn.addEventListener('click', joinChannel);
 
-        function initPeer() {
-            myUserId = `${myRoom}-user${registrationAttempt}`;
-            otherUserId = `${myRoom}-user${registrationAttempt === 1 ? 2 : 1}`;
-            
-            console.log(`Attempting to register as: ${myUserId}`);
-            
-            // CRITICAL FOR UAE: Use TURN servers on TCP 443
-            // This makes traffic look like HTTPS and bypasses VoIP blocks
-            peer = new Peer(myUserId, {
-                config: {
-                    iceServers: [
-                        // STUN servers (fast, but can be blocked)
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        
-                        // FREE TURN servers on TCP 443 (looks like HTTPS)
-                        // These are public relay servers - traffic goes through them
-                        { 
-                            urls: 'turn:openrelay.metered.ca:443',
-                            username: 'openrelayproject',
-                            credential: 'openrelayproject'
-                        },
-                        { 
-                            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-                            username: 'openrelayproject',
-                            credential: 'openrelayproject'
-                        },
-                        { 
-                            urls: 'turn:openrelay.metered.ca:80?transport=tcp',
-                            username: 'openrelayproject',
-                            credential: 'openrelayproject'
-                        }
-                    ],
-                    iceTransportPolicy: 'all' // Try all, prefer relay if needed
-                }
-            });
+  // Push-to-talk
+  function startTalk(e){
+    e.preventDefault();
+    if(!localStream) return;
+    localStream.getAudioTracks().forEach(t => t.enabled = true);
+    pttBtn.classList.add('active');
+    airBadge.textContent = 'ON AIR';
+    airBadge.classList.add('on');
+  }
+  function stopTalk(e){
+    if(e) e.preventDefault();
+    if(!localStream) return;
+    localStream.getAudioTracks().forEach(t => t.enabled = false);
+    pttBtn.classList.remove('active');
+    airBadge.textContent = 'STANDBY';
+    airBadge.classList.remove('on');
+  }
+  pttBtn.addEventListener('pointerdown', startTalk);
+  pttBtn.addEventListener('pointerup', stopTalk);
+  pttBtn.addEventListener('pointerleave', stopTalk);
+  pttBtn.addEventListener('pointercancel', stopTalk);
 
-            peer.on('open', id => {
-                console.log('Successfully registered as:', id);
-                
-                if (registrationAttempt === 1) {
-                    statusCall.textContent = 'Waiting for other person to join...';
-                } else {
-                    statusCall.textContent = 'Connecting to host...';
-                    setTimeout(() => {
-                        if (!currentCall && peer && !peer.destroyed) {
-                            console.log('User2 calling user1...');
-                            const call = peer.call(otherUserId, localStream);
-                            handleCall(call);
-                        }
-                    }, 1000);
-                }
-            });
+  // Camera toggle
+  let camOn = true;
+  camBtn.addEventListener('click', () => {
+    if(!localStream) return;
+    camOn = !camOn;
+    localStream.getVideoTracks().forEach(t => t.enabled = camOn);
+    camBtn.classList.toggle('off', !camOn);
+  });
 
-            peer.on('call', call => {
-                console.log('Incoming call from:', call.peer);
-                statusCall.textContent = 'Connected!';
-                call.answer(localStream);
-                handleCall(call);
-            });
+  // Switch front/back camera
+  switchCamBtn.addEventListener('click', async () => {
+    if(!localStream) return;
+    facingMode = facingMode === 'user' ? 'environment' : 'user';
+    try{
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        audio:false, video:{ facingMode: facingMode, width:{ideal:640}, height:{ideal:480} }
+      });
+      const newTrack = newStream.getVideoTracks()[0];
+      const oldTrack = localStream.getVideoTracks()[0];
+      localStream.removeTrack(oldTrack);
+      localStream.addTrack(newTrack);
+      oldTrack.stop();
+      localVideo.srcObject = localStream;
+      if(currentCall && currentCall.peerConnection){
+        const sender = currentCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+        if(sender) sender.replaceTrack(newTrack);
+      }
+    }catch(e){ console.error(e); }
+  });
 
-            peer.on('error', err => {
-                console.error('PeerJS error:', err);
-                
-                if (err.type === 'unavailable-id' && registrationAttempt === 1) {
-                    registrationAttempt = 2;
-                    peer.destroy();
-                    setTimeout(() => initPeer(), 500);
-                } else if (err.type === 'peer-unavailable') {
-                    statusCall.textContent = 'Waiting for other person to join...';
-                } else if (err.type === 'network' || err.type === 'server-error') {
-                    statusCall.textContent = 'Network blocked. Try VPN.';
-                } else if (err.type === 'ice-timeout' || err.type === 'disconnected') {
-                    statusCall.textContent = 'Connection blocked. Use VPN.';
-                } else {
-                    statusCall.textContent = 'Error: ' + err.type + ' (Try VPN)';
-                }
-            });
-        }
+  // End call
+  endBtn.addEventListener('click', () => {
+    if(currentCall) currentCall.close();
+    if(peer) peer.destroy();
+    if(localStream) localStream.getTracks().forEach(t => t.stop());
+    localStream = null;
+    peer = null;
+    currentCall = null;
+    callPanel.style.display = 'none';
+    setupPanel.style.display = 'block';
+    hostBtn.disabled = false; joinBtn.disabled = false;
+    lcdLine.textContent = 'Call ended. Enter a channel name to start again.';
+    setStatus('Off air', false);
+  });
 
-        function handleCall(call) {
-            currentCall = call;
-            statusCall.textContent = 'Connected!';
-
-            call.on('stream', remoteStream => {
-                console.log('Received remote stream');
-                remoteVideo.srcObject = remoteStream;
-                remoteVideo.play().catch(err => console.error(err));
-            });
-
-            call.on('close', () => endCall());
-            call.on('error', err => {
-                console.error('Call error:', err);
-                statusCall.textContent = 'Call dropped.';
-                currentCall = null;
-            });
-        }
-
-        function updatePTTButton(isMuted) {
-            if (isMuted) {
-                pttBtn.classList.remove('unmuted');
-                pttBtn.classList.add('muted');
-                pttIcon.textContent = '🔇';
-                pttText.textContent = 'TAP TO TALK';
-            } else {
-                pttBtn.classList.remove('muted');
-                pttBtn.classList.add('unmuted');
-                pttIcon.textContent = '🎤';
-                pttText.textContent = 'TAP TO MUTE';
-            }
-        }
-
-        function updateCamButton(isMuted) {
-            if (isMuted) {
-                camBtn.textContent = '📺 Camera OFF';
-                camBtn.className = 'btn-danger';
-            } else {
-                camBtn.textContent = '📹 Camera ON';
-                camBtn.className = 'btn-success';
-            }
-        }
-
-        pttBtn.addEventListener('click', () => {
-            if (!localStream) return;
-            const audioTrack = localStream.getAudioTracks()[0];
-            if (audioTrack) {
-                audioTrack.enabled = !audioTrack.enabled;
-                updatePTTButton(!audioTrack.enabled);
-            }
-        });
-
-        camBtn.addEventListener('click', () => {
-            if (!localStream) return;
-            const videoTrack = localStream.getVideoTracks()[0];
-            videoTrack.enabled = !videoTrack.enabled;
-            updateCamButton(!videoTrack.enabled);
-        });
-
-        hangupBtn.addEventListener('click', () => {
-            if (currentCall) currentCall.close();
-            if (peer) peer.destroy();
-            if (localStream) localStream.getTracks().forEach(track => track.stop());
-            location.reload();
-        });
-
-        function endCall() {
-            if (currentCall) { currentCall.close(); currentCall = null; }
-            remoteVideo.srcObject = null;
-            statusCall.textContent = 'Disconnected.';
-        }
-
-        initRoom();
-    </script>
+  window.addEventListener('beforeunload', () => {
+    if(localStream) localStream.getTracks().forEach(t => t.stop());
+    if(peer) peer.destroy();
+  });
+})();
+</script>
 </body>
 </html>
