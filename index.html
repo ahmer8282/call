@@ -417,6 +417,40 @@
             return 'wt-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
         }
 
+        // ----- ICE Servers (updated for UAE) -----
+        function getIceServers() {
+            return {
+                iceServers: [
+                    // Primary STUN servers - multiple options
+                    { urls: 'stun:stun.voipstunt.com:3478' },
+                    { urls: 'stun:stun.voipbuster.com:3478' },
+                    { urls: 'stun:stun.ekiga.net:3478' },
+                    { urls: 'stun:stun.iptel.org:3478' },
+                    { urls: 'stun:stun.1und1.de:3478' },
+                    // Backup Google STUN
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    // TURN servers for when direct connection fails
+                    { 
+                        urls: 'turn:openrelay.metered.ca:80',
+                        username: 'openrelayproject',
+                        credential: 'openrelayproject'
+                    },
+                    { 
+                        urls: 'turn:openrelay.metered.ca:443',
+                        username: 'openrelayproject',
+                        credential: 'openrelayproject'
+                    },
+                    // Additional TURN servers
+                    {
+                        urls: 'turn:numb.viagenie.ca:3478',
+                        username: 'webrtc@live.com',
+                        credential: 'muazkh'
+                    }
+                ]
+            };
+        }
+
         // ----- Camera switch -----
         async function switchCamera() {
             if (!localStream) {
@@ -621,14 +655,7 @@
 
             peer = new Peer(id, {
                 debug: 2,
-                config: {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-                        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
-                    ]
-                }
+                config: getIceServers()
             });
 
             peer.on('open', (id) => {
@@ -861,7 +888,6 @@
         function editId() {
             const currentId = myIdDisplay.innerText;
             if (currentId.includes('⚡')) {
-                // First time setup - suggest a random ID
                 const suggested = generateId();
                 const newId = prompt('Enter your Peer ID (must be unique):', suggested);
                 if (newId && newId.trim() !== '') {
