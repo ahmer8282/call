@@ -3,17 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Multi-User Walkie-Talkie</title>
-    <!-- Jitsi Meet External API -->
-    <script src='https://meet.jit.si/external_api.js'></script>
-    <!-- PeerJS Fallback -->
+    <title>Direct Walkie-Talkie</title>
+    <!-- PeerJS for direct Peer-to-Peer connection -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <!-- QR Code Generator -->
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         :root {
             --bg-color: #121212;
-            --card-bg: rgba(30, 30, 30, 0.9);
+            --card-bg: rgba(30, 30, 30, 0.95);
             --primary: #007aff;
             --danger: #ff3b30;
             --success: #34c759;
@@ -41,35 +39,15 @@
             height: 100dvh;
         }
 
-        /* Video Containers */
-        #jitsi-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-            background: #000;
-        }
-
-        #p2p-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-            background: #000;
-            display: none; /* Hidden by default */
-            flex-direction: column;
-        }
-
-        .video-wrapper {
+        /* Video Container */
+        .video-container {
             flex: 1;
             position: relative;
+            background: #000;
             display: flex;
             align-items: center;
             justify-content: center;
+            min-height: 0;
             overflow: hidden;
         }
 
@@ -84,23 +62,20 @@
 
         #localVideo {
             position: absolute;
-            bottom: 10px;
-            right: 10px;
-            width: 80px;
-            height: 110px;
-            border-radius: 8px;
-            border: 2px solid rgba(255,255,255,0.2);
+            bottom: 15px;
+            right: 15px;
+            width: 90px;
+            height: 120px;
+            border-radius: 10px;
+            border: 2px solid rgba(255,255,255,0.3);
             z-index: 2;
             object-fit: cover;
-            transform: scaleX(-1);
+            transform: scaleX(-1); /* Mirror effect */
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
 
         /* Custom UI Overlay */
         .controls {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
             background: var(--card-bg);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
@@ -112,7 +87,9 @@
             border-top-left-radius: 20px;
             border-top-right-radius: 20px;
             box-shadow: 0 -4px 20px rgba(0,0,0,0.6);
-            z-index: 10;
+            flex-shrink: 0;
+            max-height: 45vh;
+            overflow-y: auto;
         }
 
         .room-code-display {
@@ -284,29 +261,24 @@
         .toast.show { opacity: 1; }
 
         @media (orientation: landscape) and (max-height: 500px) {
-            .controls { padding: 10px; gap: 8px; }
+            .controls { padding: 10px; gap: 8px; max-height: 50vh; }
             .ptt-button { padding: 12px; font-size: 16px; }
             .room-code-display .code { font-size: 24px; }
-            #localVideo { width: 60px; height: 80px; }
+            #localVideo { width: 60px; height: 80px; bottom: 10px; right: 10px; }
         }
     </style>
 </head>
 <body>
 
-    <!-- Jitsi Video Grid (Primary) -->
-    <div id="jitsi-container"></div>
-
-    <!-- P2P Video Fallback -->
-    <div id="p2p-container">
-        <div class="video-wrapper">
-            <video id="remoteVideo" autoplay playsinline muted></video>
-            <video id="localVideo" autoplay playsinline muted></video>
-        </div>
+    <!-- Video Area -->
+    <div class="video-container">
+        <video id="remoteVideo" autoplay playsinline muted></video>
+        <video id="localVideo" autoplay playsinline muted></video>
     </div>
 
     <!-- SETUP SCREEN -->
     <div class="controls" id="setupScreen">
-        <div class="status">Your Room Code:</div>
+        <div class="status">Your Direct Room Code:</div>
         
         <div class="room-code-display">
             <label>Share this link or QR code:</label>
@@ -330,10 +302,10 @@
         <div class="walkie-controls">
             <div class="room-display">
                 <span>Room: <strong id="currentRoom">-</strong></span>
-                <span class="mode-badge" id="modeBadge">Server Mode</span>
+                <span class="mode-badge">Direct P2P Mode</span>
             </div>
             
-            <div class="status" id="statusCall">Connecting to server...</div>
+            <div class="status" id="statusCall">Initializing connection...</div>
 
             <button class="ptt-button muted" id="pttBtn">
                 <span id="pttIcon">🔇</span>
@@ -341,7 +313,7 @@
             </button>
 
             <div class="action-row">
-                <button class="btn-success" id="camBtn">📹 Camera ON</button>
+                <button class="btn-success" id="camBtn" disabled>📹 Camera ON</button>
                 <button class="btn-danger" id="hangupBtn">📞 Leave</button>
             </div>
         </div>
@@ -365,15 +337,13 @@
         const showQrBtn = document.getElementById('showQrBtn');
         const qrContainer = document.getElementById('qrContainer');
         const toast = document.getElementById('toast');
-        const modeBadge = document.getElementById('modeBadge');
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
 
         let myRoom;
         let qrCode = null;
-        let jitsiApi = null;
-        let connectionMode = 'jitsi'; // 'jitsi' or 'p2p'
-        
-        // P2P Variables
-        let peer, localStream, currentCall, myUserId, otherUserId, registrationAttempt = 1;
+        let peer, localStream, currentCall;
+        let myUserId, otherUserId, registrationAttempt = 1;
 
         function generateRoomCode() {
             const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -440,132 +410,67 @@
 
         joinBtn.addEventListener('click', async () => {
             joinBtn.disabled = true;
-            joinBtn.textContent = '⏳ Connecting...';
-            setupScreen.classList.add('hidden');
-            callScreen.classList.remove('hidden');
-            currentRoomDisplay.textContent = myRoom;
-
-            // Check if Jitsi script was blocked by ad-blocker
-            if (typeof JitsiMeetExternalAPI === 'undefined') {
-                console.log('Jitsi blocked, falling back to P2P');
-                fallbackToP2P();
-                return;
-            }
-
-            // Try Jitsi First
-            try {
-                const domain = 'meet.jit.si';
-                const options = {
-                    roomName: `WalkieTalkie_${myRoom}`,
-                    width: '100%',
-                    height: '100%',
-                    parentNode: document.querySelector('#jitsi-container'),
-                    configOverwrite: {
-                        startWithAudioMuted: true,
-                        startWithVideoMuted: false,
-                        prejoinPageEnabled: false,
-                        disableDeepLinking: true,
-                        resolution: 480,
-                        constraints: { video: { height: { ideal: 480 } } }
-                    },
-                    interfaceConfigOverwrite: {
-                        TOOLBAR_BUTTONS: [],
-                        SHOW_JITSI_WATERMARK: false,
-                        SHOW_WATERMARK_FOR_GUESTS: false,
-                        DEFAULT_BACKGROUND: '#121212',
-                        MOBILE_APP_PROMO: false,
-                        TILE_VIEW_MAX_COLUMNS: 3,
-                        HIDE_INVITE_MORE_HEADER: true
-                    },
-                    userInfo: { displayName: 'User' + Math.floor(Math.random()*1000) }
-                };
-
-                jitsiApi = new JitsiMeetExternalAPI(domain, options);
-                connectionMode = 'jitsi';
-
-                // Timeout fallback: If Jitsi takes longer than 6 seconds, switch to P2P
-                let jitsiJoined = false;
-                setTimeout(() => {
-                    if (!jitsiJoined && connectionMode === 'jitsi') {
-                        console.log('Jitsi timeout, falling back to P2P');
-                        statusCall.textContent = 'Server busy, switching to direct connection...';
-                        if (jitsiApi) {
-                            jitsiApi.dispose();
-                            jitsiApi = null;
-                        }
-                        fallbackToP2P();
-                    }
-                }, 6000);
-
-                jitsiApi.on('videoConferenceJoined', () => {
-                    jitsiJoined = true;
-                    statusCall.textContent = 'Connected! Tap to talk.';
-                    modeBadge.textContent = 'Server Mode (Up to 50 users)';
-                    modeBadge.style.background = 'var(--success)';
-                    modeBadge.style.color = '#fff';
-                    updatePTTButton(true); // Start muted
-                    updateCamButton(false); // Start unmuted
-                });
-
-                jitsiApi.on('audioMuteStatusChanged', (payload) => updatePTTButton(payload.muted));
-                jitsiApi.on('videoMuteStatusChanged', (payload) => updateCamButton(payload.muted));
-                jitsiApi.on('readyToClose', () => location.reload());
-
-            } catch (err) {
-                console.error('Jitsi init error:', err);
-                fallbackToP2P();
-            }
-        });
-
-        // --- P2P FALLBACK SYSTEM ---
-        async function fallbackToP2P() {
-            connectionMode = 'p2p';
-            document.getElementById('jitsi-container').style.display = 'none';
-            document.getElementById('p2p-container').style.display = 'flex';
-            modeBadge.textContent = 'Direct Mode (Best for 2-4 users)';
-            modeBadge.style.background = 'var(--warning)';
-            modeBadge.style.color = '#000';
+            joinBtn.textContent = '⏳ Starting camera...';
 
             try {
+                // Request media AFTER user gesture (required for iOS)
                 localStream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, 
-                    audio: true 
+                    audio: { echoCancellation: true, noiseSuppression: true }
                 });
                 
-                const localVideo = document.getElementById('localVideo');
                 localVideo.srcObject = localStream;
-                await localVideo.play();
+                await localVideo.play(); // Explicit play for iOS
                 
-                localStream.getAudioTracks()[0].enabled = false; // Start muted
+                // Start muted (Walkie-Talkie style)
+                localStream.getAudioTracks()[0].enabled = false;
                 updatePTTButton(true);
                 updateCamButton(false);
-
+                
+                camBtn.disabled = false;
+                currentRoomDisplay.textContent = myRoom;
+                
+                setupScreen.classList.add('hidden');
+                callScreen.classList.remove('hidden');
+                
                 initPeer();
             } catch (err) {
-                statusCall.textContent = 'Camera/Mic access denied.';
+                console.error('Media error:', err);
+                alert('Camera/Mic access denied. Please allow permissions in Settings and refresh.');
                 joinBtn.disabled = false;
                 joinBtn.textContent = '📹 Retry';
             }
-        }
+        });
 
         function initPeer() {
             myUserId = `${myRoom}-user${registrationAttempt}`;
             otherUserId = `${myRoom}-user${registrationAttempt === 1 ? 2 : 1}`;
             
+            console.log(`Attempting to register as: ${myUserId}`);
+            
             peer = new Peer(myUserId, {
                 config: {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' }
                     ]
                 }
             });
 
             peer.on('open', id => {
-                statusCall.textContent = 'Connected (Direct). Waiting for others...';
-                if (registrationAttempt === 2) {
+                console.log('Successfully registered as:', id);
+                
+                if (registrationAttempt === 1) {
+                    statusCall.textContent = 'Waiting for other person to join...';
+                } else {
+                    statusCall.textContent = 'Connecting to host...';
+                    // If I'm user2 (guest), call user1 (host) automatically
                     setTimeout(() => {
-                        if (!currentCall) {
+                        if (!currentCall && peer && !peer.destroyed) {
+                            console.log('User2 calling user1...');
                             const call = peer.call(otherUserId, localStream);
                             handleCall(call);
                         }
@@ -574,37 +479,63 @@
             });
 
             peer.on('call', call => {
-                statusCall.textContent = 'Connected (Direct)!';
+                console.log('Incoming call from:', call.peer);
+                statusCall.textContent = 'Connected!';
                 call.answer(localStream);
                 handleCall(call);
             });
 
             peer.on('error', err => {
+                console.error('PeerJS error:', err);
+                
                 if (err.type === 'unavailable-id' && registrationAttempt === 1) {
+                    // user1 is taken, so I must be user2
+                    console.log('user1 taken, switching to user2');
                     registrationAttempt = 2;
                     peer.destroy();
                     setTimeout(() => initPeer(), 500);
                 } else if (err.type === 'peer-unavailable') {
                     statusCall.textContent = 'Waiting for other person to join...';
+                } else if (err.type === 'network' || err.type === 'server-error') {
+                    statusCall.textContent = 'Network error. Retrying...';
+                    setTimeout(() => {
+                        peer.destroy();
+                        initPeer();
+                    }, 3000);
+                } else {
+                    statusCall.textContent = 'Error: ' + err.type;
                 }
             });
         }
 
         function handleCall(call) {
             currentCall = call;
+            statusCall.textContent = 'Connected!';
+
             call.on('stream', remoteStream => {
-                const remoteVideo = document.getElementById('remoteVideo');
+                console.log('Received remote stream');
                 remoteVideo.srcObject = remoteStream;
-                remoteVideo.play().catch(e => console.error(e));
+                
+                // Explicit play for iOS
+                remoteVideo.play().then(() => {
+                    console.log('Remote video playing');
+                }).catch(err => {
+                    console.error('Remote video play error:', err);
+                });
             });
+
             call.on('close', () => {
+                console.log('Call closed');
+                endCall();
+            });
+            
+            call.on('error', err => {
+                console.error('Call error:', err);
+                statusCall.textContent = 'Call dropped. Waiting to reconnect...';
                 currentCall = null;
-                document.getElementById('remoteVideo').srcObject = null;
-                statusCall.textContent = 'Disconnected. Waiting to reconnect...';
             });
         }
 
-        // --- UI CONTROLS ---
         function updatePTTButton(isMuted) {
             if (isMuted) {
                 pttBtn.classList.remove('unmuted');
@@ -630,36 +561,36 @@
         }
 
         pttBtn.addEventListener('click', () => {
-            if (connectionMode === 'jitsi' && jitsiApi) {
-                jitsiApi.executeCommand('toggleAudio');
-            } else if (localStream) {
-                const audioTrack = localStream.getAudioTracks()[0];
-                audioTrack.enabled = !audioTrack.enabled;
-                updatePTTButton(!audioTrack.enabled);
-            }
+            if (!localStream) return;
+            const audioTrack = localStream.getAudioTracks()[0];
+            audioTrack.enabled = !audioTrack.enabled;
+            updatePTTButton(!audioTrack.enabled);
         });
 
         camBtn.addEventListener('click', () => {
-            if (connectionMode === 'jitsi' && jitsiApi) {
-                jitsiApi.executeCommand('toggleVideo');
-            } else if (localStream) {
-                const videoTrack = localStream.getVideoTracks()[0];
-                videoTrack.enabled = !videoTrack.enabled;
-                updateCamButton(!videoTrack.enabled);
-            }
+            if (!localStream) return;
+            const videoTrack = localStream.getVideoTracks()[0];
+            videoTrack.enabled = !videoTrack.enabled;
+            updateCamButton(!videoTrack.enabled);
         });
 
         hangupBtn.addEventListener('click', () => {
-            if (connectionMode === 'jitsi' && jitsiApi) {
-                jitsiApi.executeCommand('hangup');
-            } else {
-                if (currentCall) currentCall.close();
-                if (peer) peer.destroy();
-                if (localStream) localStream.getTracks().forEach(track => track.stop());
-                location.reload();
-            }
+            if (currentCall) currentCall.close();
+            if (peer) peer.destroy();
+            if (localStream) localStream.getTracks().forEach(track => track.stop());
+            location.reload();
         });
 
+        function endCall() {
+            if (currentCall) {
+                currentCall.close();
+                currentCall = null;
+            }
+            remoteVideo.srcObject = null;
+            statusCall.textContent = 'Disconnected. Waiting to reconnect...';
+        }
+
+        // Initialize on load
         initRoom();
     </script>
 </body>
