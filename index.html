@@ -325,7 +325,7 @@
 
     <!-- My Peer ID -->
     <div class="peer-row">
-        <span class="my-id" id="myIdDisplay" title="Click to edit">⚡ connecting...</span>
+        <span class="my-id" id="myIdDisplay">⚡ connecting...</span>
         <button class="btn-sm" id="connectBtn"><i class="fas fa-plug"></i> Go online</button>
         <button class="btn-sm" id="copyBtn"><i class="far fa-copy"></i></button>
     </div>
@@ -407,6 +407,7 @@
         let remotePeerId = '';
         let isOnline = false;
         let currentMode = 'caller';
+        let reconnectAttempts = 0;
 
         // ----- Persistent ID -----
         const STORAGE_KEY = 'walkietalk_peer_id';
@@ -623,6 +624,10 @@
             }
             myPeerId = id;
             myIdDisplay.innerText = id;
+            reconnectAttempts = 0;
+
+            updateStatus('Connecting...', true);
+            updateInfo('Connecting to PeerJS network...');
 
             peer = new Peer(id, {
                 debug: 0,
@@ -639,9 +644,9 @@
             peer.on('open', (id) => {
                 myPeerId = id;
                 myIdDisplay.innerText = id;
-                // Store the ID in case it was different (e.g., server assigned)
                 storeId(id);
                 isOnline = true;
+                reconnectAttempts = 0;
                 updateStatus('Ready', true);
                 updateInfo(currentMode === 'caller' ? 'Enter ID and call' : 'Waiting for incoming call...');
                 connectBtn.innerHTML = '<i class="fas fa-check"></i> Online';
@@ -657,27 +662,55 @@
             peer.on('error', (err) => {
                 console.error('Peer error:', err);
                 if (err.type === 'unavailable-id') {
-                    // ID is taken, generate a new one and retry
+                    // ID is taken, generate a new one
                     const newId = generateId();
                     storeId(newId);
-                    alert('ID "' + myPeerId + '" is taken. New ID: ' + newId);
-                    connectPeer();
+                    myIdDisplay.innerText = newId;
+                    updateInfo('ID was taken, using: ' + newId);
+                    // Destroy and reconnect with new ID
+                    if (peer) {
+                        peer.destroy();
+                        peer = null;
+                    }
+                    setTimeout(() => {
+                        connectPeer();
+                    }, 500);
+                } else if (err.type === 'network') {
+                    updateStatus('Network error', false);
+                    updateInfo('Check internet connection');
+                    connectBtn.innerHTML = '<i class="fas fa-plug"></i> Retry';
                 } else {
                     updateStatus('Error', false);
                     updateInfo('Error: ' + err.type);
+                    connectBtn.innerHTML = '<i class="fas fa-plug"></i> Retry';
                 }
             });
 
             peer.on('disconnected', () => {
                 updateStatus('Disconnected', false);
-                updateInfo('Disconnected');
+                updateInfo('Disconnected - reconnecting...');
+                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Reconnect';
+                // Try to reconnect automatically
+                setTimeout(() => {
+                    if (peer && !peer.open) {
+                        peer.reconnect();
+                    }
+                }, 2000);
+            });
+
+            peer.on('close', () => {
+                updateStatus('Closed', false);
+                updateInfo('Connection closed');
                 connectBtn.innerHTML = '<i class="fas fa-plug"></i> Go online';
                 fullReset();
             });
 
             // ----- Auto-answer incoming calls -----
             peer.on('call', (incomingCall) => {
-                if (isCallActive) { incomingCall.answer(); return; }
+                if (isCallActive) { 
+                    incomingCall.answer(); 
+                    return; 
+                }
                 
                 const answerCall = () => {
                     if (!localStream) {
@@ -750,6 +783,7 @@
         // ----- Make outgoing call -----
         async function makeCall() {
             if (!peer) { alert('Connect first'); return; }
+            if (!isOnline) { alert('Not connected to PeerJS'); return; }
             if (!localStream) {
                 await startLocalStream();
                 if (!localStream) return;
@@ -847,7 +881,6 @@
             const newId = prompt('Enter your Peer ID (must be unique):', currentId);
             if (newId && newId.trim() !== '' && newId !== currentId) {
                 const trimmed = newId.trim();
-                // Store new ID and reconnect
                 storeId(trimmed);
                 if (peer) {
                     peer.destroy();
@@ -915,14 +948,15 @@
             if (e.key === 'Enter') makeCall();
         });
 
-        // Auto-connect on load
+        // Auto-connect on load with a small delay
         window.addEventListener('load', () => {
-            setTimeout(connectPeer, 500);
+            setTimeout(connectPeer, 1000);
         });
 
         // expose
         window.__reset = fullReset;
         window.__hangup = hangUp;
+        window.__reconnect = connectPeer;
     })();
 </script>
 </body>
